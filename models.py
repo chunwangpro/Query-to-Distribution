@@ -317,7 +317,7 @@ class LatticeCDF:
 
     def generate_3(self, grid, pred=None):
         # 使用 common.CsvTable / cal_true_card / pd.concat
-        # 比前两种快
+        # 比前两种都快
         if pred is None:
             pred = self.predict(grid)
         assert pred.shape[0] == grid.shape[0]
