@@ -1,14 +1,14 @@
 """Data abstractions."""
+
 import copy
-import pdb
 import time
 
 import numpy as np
 import pandas as pd
-
 import torch
 from torch.utils import data
 
+# import pdb
 
 # Na/NaN/NaT Semantics
 #
@@ -45,139 +45,139 @@ class Column(object):
 
         # pg_name is the name of the corresponding column in Postgres.  This is
         # put here since, e.g., PG disallows whitespaces in names.
-        self.pg_name = pg_name if pg_name else name
+        self.pg_name = name
 
-    def Name(self):
-        """Name of this column."""
-        return self.name
+    # def Name(self):
+    #     """Name of this column."""
+    #     return self.name
 
-    def DistributionSize(self):
-        """This column will take on discrete values in [0, N).
+    # def DistributionSize(self):
+    #     """This column will take on discrete values in [0, N).
 
-        Used to dictionary-encode values to this discretized range.
-        """
-        return self.distribution_size
+    #     Used to dictionary-encode values to this discretized range.
+    #     """
+    #     return self.distribution_size
 
-    def ValToBin(self, val):
-        if isinstance(self.all_distinct_values, list):
-            return self.all_distinct_values.index(val)
-        inds = np.where(self.all_distinct_values == val)
-        assert len(inds[0]) > 0, val
-
-        return inds[0][0]
+    # def ValToBin(self, val):
+    #     if isinstance(self.all_distinct_values, list):
+    #         return self.all_distinct_values.index(val)
+    #     inds = np.where(self.all_distinct_values == val)
+    #     assert len(inds[0]) > 0, val
+    #     return inds[0][0]
 
     def SetDistribution(self, distinct_values):
         """This is all the values this column will ever see."""
-        assert self.all_distinct_values is None
+        # assert self.all_distinct_values is None
         # pd.isnull returns true for both np.nan and np.datetime64('NaT').
-        is_nan = pd.isnull(distinct_values)
-        contains_nan = np.any(is_nan)
-        dv_no_nan = distinct_values[~is_nan]
+        # is_nan = pd.isnull(distinct_values)
+        # contains_nan = np.any(is_nan)
+        # dv_no_nan = distinct_values[~is_nan]
         # NOTE: np.sort puts NaT values at beginning, and NaN values at end.
         # For our purposes we always add any null value to the beginning.
-        vs = np.sort(np.unique(dv_no_nan))
-        if contains_nan and np.issubdtype(distinct_values.dtype, np.datetime64):
-            vs = np.insert(vs, 0, np.datetime64('NaT'))
-        elif contains_nan:
-            vs = np.insert(vs, 0, np.nan)
-        if self.distribution_size is not None:
-            assert len(vs) == self.distribution_size
-        self.all_distinct_values = vs
-        self.distribution_size = len(vs)
+        # vs = np.sort(np.unique(dv_no_nan))
+        # if contains_nan and np.issubdtype(distinct_values.dtype, np.datetime64):
+        #     vs = np.insert(vs, 0, np.datetime64("NaT"))
+        # elif contains_nan:
+        #     vs = np.insert(vs, 0, np.nan)
+        # if self.distribution_size is not None:
+        #     assert len(vs) == self.distribution_size
+        # self.all_distinct_values = vs
+        # self.distribution_size = len(vs)
+        self.distribution_size = len(np.unique(distinct_values))
         return self
 
-    def UpdateDistribution(self, distinct_values):
-        """This is all the values this column will ever see."""
-        # pd.isnull returns true for both np.nan and np.datetime64('NaT').
-        is_nan = pd.isnull(distinct_values)
-        contains_nan = np.any(is_nan)
-        dv_no_nan = distinct_values[~is_nan]
-        # NOTE: np.sort puts NaT values at beginning, and NaN values at end.
-        # For our purposes we always add any null value to the beginning.
-        vs = np.sort(np.unique(dv_no_nan))
-        if contains_nan and np.issubdtype(distinct_values.dtype, np.datetime64):
-            vs = np.insert(vs, 0, np.datetime64('NaT'))
-        elif contains_nan:
-            vs = np.insert(vs, 0, np.nan)
-        self.all_distinct_values = vs
-        self.distribution_size = len(vs)
-        return self
+    # def UpdateDistribution(self, distinct_values):
+    #     """This is all the values this column will ever see."""
+    #     # pd.isnull returns true for both np.nan and np.datetime64('NaT').
+    #     is_nan = pd.isnull(distinct_values)
+    #     contains_nan = np.any(is_nan)
+    #     dv_no_nan = distinct_values[~is_nan]
+    #     # NOTE: np.sort puts NaT values at beginning, and NaN values at end.
+    #     # For our purposes we always add any null value to the beginning.
+    #     vs = np.sort(np.unique(dv_no_nan))
+    #     if contains_nan and np.issubdtype(distinct_values.dtype, np.datetime64):
+    #         vs = np.insert(vs, 0, np.datetime64("NaT"))
+    #     elif contains_nan:
+    #         vs = np.insert(vs, 0, np.nan)
+    #     self.all_distinct_values = vs
+    #     self.distribution_size = len(vs)
+    #     return self
 
     def Fill(self, data_instance, infer_dist=False):
-        assert self.data is None
+        # assert self.data is None
         self.data = data_instance
         # If no distribution is currently specified, then infer distinct values
         # from data.
-        if infer_dist:
-            self.SetDistribution(self.data)
+        # if infer_dist:
+        #     self.SetDistribution(self.data)
         return self
 
     def __repr__(self):
-        return 'Column({}, distribution_size={})'.format(
-            self.name, self.distribution_size)
+        return "Column({}, distribution_size={})".format(self.name, self.distribution_size)
 
 
-class Table(object):
-    """A collection of Columns."""
+# class Table(object):
+#     """A collection of Columns."""
 
-    def __init__(self, name, columns, pg_name=None):
-        """Creates a Table.
+#     def __init__(self, name, columns, pg_name=None):
+#         """Creates a Table.
 
-        Args:
-            name: Name of this table object.
-            columns: List of Column instances to populate this table.
-            pg_name: name of the corresponding table in Postgres.
-        """
-        self.name = name
-        self.cardinality = self._validate_cardinality(columns)
-        self.columns = columns
+#         Args:
+#             name: Name of this table object.
+#             columns: List of Column instances to populate this table.
+#             pg_name: name of the corresponding table in Postgres.
+#         """
+#         self.name = name
+#         self.cardinality = self._validate_cardinality(columns)
+#         self.columns = columns
 
-        self.val_to_bin_funcs = [c.ValToBin for c in columns]
-        self.name_to_index = {c.Name(): i for i, c in enumerate(self.columns)}
+#         self.val_to_bin_funcs = [c.ValToBin for c in columns]
+#         self.name_to_index = {c.Name(): i for i, c in enumerate(self.columns)}
 
-        if pg_name:
-            self.pg_name = pg_name
-        else:
-            self.pg_name = name
+#         if pg_name:
+#             self.pg_name = pg_name
+#         else:
+#             self.pg_name = name
 
-    def __repr__(self):
-        return '{}({})'.format(self.name, self.columns)
+#     def __repr__(self):
+#         return "{}({})".format(self.name, self.columns)
 
-    def _validate_cardinality(self, columns):
-        """Checks that all the columns have same the number of rows."""
-        cards = [len(c.data) for c in columns]
-        c = np.unique(cards)
-        assert len(c) == 1, c
-        return c[0]
+#     def _validate_cardinality(self, columns):
+#         """Checks that all the columns have same the number of rows."""
+#         cards = [len(c.data) for c in columns]
+#         c = np.unique(cards)
+#         assert len(c) == 1, c
+#         return c[0]
 
-    def Name(self):
-        """Name of this table."""
-        return self.name
+#     def Name(self):
+#         """Name of this table."""
+#         return self.name
 
-    def Columns(self):
-        """Return the list of Columns under this table."""
-        return self.columns
+#     def Columns(self):
+#         """Return the list of Columns under this table."""
+#         return self.columns
 
-    def ColumnIndex(self, name):
-        
-        """Returns index of column with the specified name."""
-      
-        assert name in self.name_to_index
-        return self.name_to_index[name]
+#     def ColumnIndex(self, name):
+#         """Returns index of column with the specified name."""
+
+#         assert name in self.name_to_index
+#         return self.name_to_index[name]
 
 
-class CsvTable(Table):
+class CsvTable(object):
     """Wraps a CSV file or pd.DataFrame as a Table."""
 
-    def __init__(self,
-                 name,
-                 filename_or_df,
-                 cols,
-                 type_casts={},
-                 pg_name=None,
-                 pg_cols=None,
-                 th = 10000,
-                 **kwargs):
+    def __init__(
+        self,
+        name,
+        filename_or_df,
+        cols=None,
+        type_casts={},
+        pg_name=None,
+        pg_cols=None,
+        th=10000,
+        **kwargs
+    ):
         """Accepts the same arguments as pd.read_csv().
 
         Args:
@@ -195,55 +195,54 @@ class CsvTable(Table):
         self.name = name
         self.pg_name = pg_name
 
-        if isinstance(filename_or_df, str):
-            self.data = self._load(filename_or_df, cols, **kwargs).fillna('')
-            #subset = int(np.floor(np.shape(self.data)[0]/10))
-            #self.data = self.data[:subset]
-        else:
-            assert (isinstance(filename_or_df, pd.DataFrame))
-            self.data = filename_or_df.fillna('')
-        print (self.data.shape)
-        self.columns = self._build_columns(self.data, cols, type_casts,pg_cols)
-        self.split_col_start_index,self.rev_index,self.split_col_size,self.split_col_bit = self._build_sub_columns(self.columns,th)
-        super(CsvTable, self).__init__(name, self.columns, pg_name)
+        # if isinstance(filename_or_df, str):
+        #     self.data = self._load(filename_or_df, cols, **kwargs).fillna("")
+        #     # subset = int(np.floor(np.shape(self.data)[0]/10))
+        #     # self.data = self.data[:subset]
+        # else:
+        #     assert isinstance(filename_or_df, pd.DataFrame)
+        #     self.data = filename_or_df.fillna("")
+        self.data = filename_or_df
+        self.columns = self._build_columns(self.data, cols, type_casts, pg_cols)
+        # self.split_col_start_index, self.rev_index, self.split_col_size, self.split_col_bit = (
+        #     self._build_sub_columns(self.columns, th)
+        # )
+        # super(CsvTable, self).__init__(name, self.columns, pg_name)
 
-    def _build_sub_columns(self,col,th):
-        num_col = len(col)
-        split_col_size = []
-        split_col_bit = [] 
-        split_col_start_index = []
-        rev_index = [] 
-        cnt = 0 
-        for i in range(num_col):
-            split_col_start_index.append(cnt)
-            bin_size = bin(col[i].distribution_size-1) 
-            print (col[i].name, col[i].distribution_size)
-            if col[i].distribution_size > th:
-                rev_index.append(i)
-                rev_index.append(i)
-                cnt += 2
-                bin_size1 = (len(bin_size)-2)//2 
-                bin_size2 = len(bin_size) -2 - bin_size1
-                split_col_size.append(int(bin_size[:2+bin_size1],2)+1)
-                split_col_size.append(pow(2,bin_size2))
-                split_col_bit.append(bin_size1)
-                split_col_bit.append(bin_size2)
-            else:
-                rev_index.append(i)
-                cnt += 1 
-                split_col_size.append(col[i].distribution_size)
-                split_col_bit.append(len(bin_size)-2)
+    # def _build_sub_columns(self, col, th):
+    #     num_col = len(col)
+    #     split_col_size = []
+    #     split_col_bit = []
+    #     split_col_start_index = []
+    #     rev_index = []
+    #     cnt = 0
+    #     for i in range(num_col):
+    #         split_col_start_index.append(cnt)
+    #         bin_size = bin(col[i].distribution_size - 1)
+    #         # print(col[i].name, col[i].distribution_size)
+    #         if col[i].distribution_size > th:
+    #             rev_index.append(i)
+    #             rev_index.append(i)
+    #             cnt += 2
+    #             bin_size1 = (len(bin_size) - 2) // 2
+    #             bin_size2 = len(bin_size) - 2 - bin_size1
+    #             split_col_size.append(int(bin_size[: 2 + bin_size1], 2) + 1)
+    #             split_col_size.append(pow(2, bin_size2))
+    #             split_col_bit.append(bin_size1)
+    #             split_col_bit.append(bin_size2)
+    #         else:
+    #             rev_index.append(i)
+    #             cnt += 1
+    #             split_col_size.append(col[i].distribution_size)
+    #             split_col_bit.append(len(bin_size) - 2)
 
-        return split_col_start_index,rev_index,split_col_size,split_col_bit
+    #     return split_col_start_index, rev_index, split_col_size, split_col_bit
 
-    def _load(self, filename, cols, **kwargs):
-        # print('Loading csv...', end=' ')
-        s = time.time()
-        df = pd.read_csv(filename, usecols=cols, **kwargs)
-        if cols is not None:
-            df = df[cols]
-        # print('done, took {:.1f}s'.format(time.time() - s))
-        return df
+    # def _load(self, filename, cols, **kwargs):
+    #     df = pd.read_csv(filename, usecols=cols, **kwargs)
+    #     if cols is not None:
+    #         df = df[cols]
+    #     return df
 
     def _build_columns(self, data, cols, type_casts, pg_cols):
         """Example args:
@@ -253,38 +252,32 @@ class CsvTable(Table):
 
         Returns: a list of Columns.
         """
-        # print('Parsing...', end=' ')
-        s = time.time()
-        for col, typ in type_casts.items():
-            if col not in data:
-                continue
-            if typ != np.datetime64:
-                data[col] = data[col].astype(typ, copy=False)
-            else:
-                # Both infer_datetime_format and cache are critical for perf.
-                
-                data[col] = pd.to_datetime(data[col],
-                                           infer_datetime_format=True,
-                                           cache=True)
+        # for col, typ in type_casts.items():
+        #     if col not in data:
+        #         continue
+        #     if typ != np.datetime64:
+        #         data[col] = data[col].astype(typ, copy=False)
+        #     else:
+        #         # Both infer_datetime_format and cache are critical for perf.
+
+        #         data[col] = pd.to_datetime(data[col], infer_datetime_format=True, cache=True)
 
         # Discretize & create Columns.
-        if cols is None:
-            cols = data.columns
+        cols = data.columns
         columns = []
-        if pg_cols is None:
-            pg_cols = [None] * len(cols)
-        for c, p in zip(cols, pg_cols):
-            col = Column(c, pg_name=p)
+        # if pg_cols is None:
+        # pg_cols = [None] * len(cols)
+        for c in cols:
+            col = Column(c)
             col.Fill(data[c])
-            print (c)
             # dropna=False so that if NA/NaN is present in data,
             # all_distinct_values will capture it.
             #
             # For numeric: np.nan
             # For datetime: np.datetime64('NaT')
-            col.SetDistribution(data[c].value_counts(dropna=False).index.values)
+            # col.SetDistribution(data[c].value_counts(dropna=False).index.values)
+            col.SetDistribution(data[c])
             columns.append(col)
-        # print('done, took {:.1f}s'.format(time.time() - s))
         return columns
 
 
@@ -294,41 +287,43 @@ class TableDataset(data.Dataset):
     def __init__(self, table):
         self.table = copy.deepcopy(table)
         # print('Discretizing table...', end=' ')
-        s = time.time()
+        # s = time.time()
         # [cardianlity, num cols].
-        self.tuples_np = np.stack(
-            [self.Discretize(c) for c in self.table.Columns()], axis=1)
-        print (self.tuples_np[0])
+        self.tuples_np = np.stack([self.Discretize(c) for c in self.table.Columns()], axis=1)
+        # print(self.tuples_np[0])
         num_col = len(table.columns)
         for i in range(num_col):
             index = table.split_col_start_index[i]
-            if  table.split_col_size[index] != table.columns[i].distribution_size:
+            if table.split_col_size[index] != table.columns[i].distribution_size:
 
-                split_col_data  =  self.split_col(self.tuples_np[:,index],table.split_col_bit[index+1])
-                self.tuples_np = np.insert(self.tuples_np,index,values=split_col_data[:,0],axis=1)
-                self.tuples_np[:,index+1] = split_col_data[:,1]
-                
-                assert max(split_col_data[:,0]) <= table.split_col_size[index] -1 
-                assert max(split_col_data[:,1]) <= table.split_col_size[index+1] -1 
-                
-        print (self.tuples_np.shape)
-        self.tuples = torch.as_tensor(
-            self.tuples_np.astype(np.float32, copy=False))
+                split_col_data = self.split_col(
+                    self.tuples_np[:, index], table.split_col_bit[index + 1]
+                )
+                self.tuples_np = np.insert(
+                    self.tuples_np, index, values=split_col_data[:, 0], axis=1
+                )
+                self.tuples_np[:, index + 1] = split_col_data[:, 1]
+
+                assert max(split_col_data[:, 0]) <= table.split_col_size[index] - 1
+                assert max(split_col_data[:, 1]) <= table.split_col_size[index + 1] - 1
+
+        # print(self.tuples_np.shape)
+        self.tuples = torch.as_tensor(self.tuples_np.astype(np.float32, copy=False))
         # print('done, took {:.1f}s'.format(time.time() - s))
 
-    def split_col(self,data,bit2):
+    def split_col(self, data, bit2):
         split_data = []
 
         for datai in data:
             bin_data = bin(datai)
-            if len(bin_data) -2 <= bit2:
-                sub_col1 = 0 
+            if len(bin_data) - 2 <= bit2:
+                sub_col1 = 0
                 sub_col2 = datai
             else:
-                sub_col1 = int(bin_data[:-bit2],2)
-                sub_col2 = int(bin_data[-bit2:],2)
+                sub_col1 = int(bin_data[:-bit2], 2)
+                sub_col2 = int(bin_data[-bit2:], 2)
 
-            split_data.append([sub_col1,sub_col2])
+            split_data.append([sub_col1, sub_col2])
         return np.array(split_data)
 
     def Discretize(self, col):
