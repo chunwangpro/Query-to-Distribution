@@ -1,30 +1,30 @@
-import argparse
 import itertools
-import sys
 
 import numpy as np
-import pandas as pd
+
+# import pandas as pd
 import tensorflow as tf
 import tensorflow_lattice as tfl
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-import common
-import datasets
-import estimators as estimators_lib
+# import common
 from query_func import *
 
+# import sys
 
-class LatticeCDF:
+
+class PWLLattice:
     def __init__(
         self,
-        name,
+        modelPath,
         table_shape,
         unique_intervals,
         pwl_keypoints=None,  # also can input table unique values
         lattice_size=2,
     ):
-        self.name = name
+        self.name = "PWLLattice"
+        self.modelPath = modelPath
         self.n_row = table_shape[0]
         self.n_column = table_shape[1]
         self.dim = len(unique_intervals.keys())
@@ -33,8 +33,8 @@ class LatticeCDF:
         self.pwl_calibration_input_keypoints = (
             unique_intervals if pwl_keypoints is None else pwl_keypoints
         )
-        self.model_path = f"saved_models/models/{self.name}_model"
-        self.weight_path = f"saved_models/weights/{self.name}_weight"
+        self.model_path = f"{self.modelPath}/{self.name}_model"
+        self.weight_path = f"{self.modelPath}/{self.name}_weight"
         # self.sample_feat = None
 
         self.model_inputs = []
@@ -197,17 +197,16 @@ class LatticeCDF:
         )
         self.model.save(f"{self.model_path}.h5")
 
-    def load(self, name=None, summary=False):
-        if name is None:
-            name = self.name  # 这里要改,还要改self.model_path、self.weight_path
-        # self.model = tf.keras.models.load_model(f"{name}.hdf5")
-        self.model.load_weights(f"{name}.h5")
+    def load(self, modelPath=None, summary=False):
+        if modelPath:
+            # self.model_path = f"{self.modelPath}/{self.name}_model"
+            # self.weight_path = f"{self.modelPath}/{self.name}_weight"
+            self.model = tf.keras.models.load_model(f"{modelPath}/{self.name}_model.h5")
+            self.model.load_weights(f"{modelPath}/{self.name}_weight.hdf5")
+        else:
+            self.model.load_weights(f"{self.weight_path}.hdf5")
         if summary:
             print(self.model.summary())
-
-    # 在代码块外（main.py中）调用
-    # m.load("my_model_final")
-    # print(m.model.summary())
 
     def predict(self, grid):
         assert grid.shape[1] == self.dim
@@ -215,206 +214,188 @@ class LatticeCDF:
         return pred
 
     def generate(self, grid, pred=None):
-        # 使用 df.query 生成数据
-        if pred is None:
-            pred = self.predict(grid)
-        assert pred.shape[0] == grid.shape[0]
-        # generate one query means generate one row, then next query and next row
-        dataNew = pd.DataFrame(
-            columns=[f"col_{i}" for i in range(self.n_column)],
-            index=[i for i in range(self.n_row)],
-        )
-        count = 0
-        for i in tqdm(range(grid.shape[0])):
-            df = dataNew
-            grid_value = grid[i]
-            for j in range(self.n_column):
-                # use <= to filter the data
-                df = df.query(f"col_{j} <= {grid_value[j]}", inplace=False)
-            xi = pred[i][0] * self.n_row - df.shape[0]
-            # Case 1: change 0.8 to 0, 1.8 to 1,
-            card = int(xi)
+        return self.generate_5(grid, pred)
 
-            if card >= 1:
-                # Case 2: change 0.8 to 0, 1.8 to 2
-                # if int(xi) >= 1:
-                # card = np.round(xi).astype("int")
-                # floor = np.floor(xi)
-                # ceil = np.ceil(xi)
-                # if floor == ceil:
-                #     card = int(xi)
-                # else:
-                #     card = np.random.choice([floor, ceil], p=[xi - floor, ceil - xi]).astype("int")
+    # def generate_1(self, grid, pred=None):
+    #     # 使用 df.query 生成数据
+    #     if pred is None:
+    #         pred = self.predict(grid)
+    #     assert pred.shape[0] == grid.shape[0]
+    #     # generate one query means generate one row, then next query and next row
+    #     dataNew = pd.DataFrame(
+    #         columns=[f"col_{i}" for i in range(self.n_column)],
+    #         index=[i for i in range(self.n_row)],
+    #     )
+    #     count = 0
+    #     for i in tqdm(range(grid.shape[0])):
+    #         df = dataNew
+    #         grid_value = grid[i]
+    #         for j in range(self.n_column):
+    #             # use <= to filter the data
+    #             df = df.query(f"col_{j} <= {grid_value[j]}", inplace=False)
+    #         xi = pred[i][0] * self.n_row - df.shape[0]
+    #         # Case 1: change 0.8 to 0, 1.8 to 1,
+    #         card = int(xi)
 
-                if count + card > self.n_row or (
-                    count + card == self.n_row and i != grid.shape[0] - 1
-                ):
-                    print(
-                        f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {grid[i]}, stop generation."
-                    )
-                    dataNew.iloc[count:, :] = grid_value
-                    break
-                else:
-                    dataNew.iloc[count : count + card, :] = grid_value
-                    count += card
+    #         if card >= 1:
+    #             # Case 2: change 0.8 to 0, 1.8 to 2
+    #             # if int(xi) >= 1:
+    #             # card = np.round(xi).astype("int")
+    #             # floor = np.floor(xi)
+    #             # ceil = np.ceil(xi)
+    #             # if floor == ceil:
+    #             #     card = int(xi)
+    #             # else:
+    #             #     card = np.random.choice([floor, ceil], p=[xi - floor, ceil - xi]).astype("int")
 
-        else:
-            print("Finished table generation")
-        dataNew.dropna(axis=0, how="all", inplace=True)
-        return dataNew
+    #             if count + card > self.n_row or (
+    #                 count + card == self.n_row and i != grid.shape[0] - 1
+    #             ):
+    #                 print(
+    #                     f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {grid[i]}, stop generation."
+    #                 )
+    #                 dataNew.iloc[count:, :] = grid_value
+    #                 break
+    #             else:
+    #                 dataNew.iloc[count : count + card, :] = grid_value
+    #                 count += card
 
-    def generate_2(self, grid, pred=None):
-        # 使用 common.CsvTable / cal_true_card / dataNew.iloc
-        # 比第一种慢
-        if pred is None:
-            pred = self.predict(grid)
-        assert pred.shape[0] == grid.shape[0]
-        # generate one query means generate one row, then next query and next row
-        dataNew = pd.DataFrame(
-            columns=[f"col_{i}" for i in range(self.n_column)],
-            index=[i for i in range(self.n_row)],
-        )
-        dataNew[:] = sys.maxsize
-        ops = np.array([["<="]] * self.n_column, dtype=object)
-        count = 0
-        for i in tqdm(range(grid.shape[0])):
-            grid_value = grid[i]
-            vals = grid_value.reshape(-1, 1)
-            table = common.CsvTable("dataNew", dataNew, dataNew.columns)
-            dataNew_cols = table.columns
-            card_current = cal_true_card((dataNew_cols, None, ops, vals), table)
-            xi = pred[i][0] * self.n_row - card_current
+    #     else:
+    #         print("Finished table generation")
+    #     dataNew.dropna(axis=0, how="all", inplace=True)
+    #     return dataNew
 
-            # Case 1: change 0.8 to 0, 1.8 to 1,
-            card = int(xi)
+    # def generate_2(self, grid, pred=None):
+    #     # common.CsvTable / cal_true_card / dataNew.iloc
+    #     if pred is None:
+    #         pred = self.predict(grid)
+    #     assert pred.shape[0] == grid.shape[0]
+    #     # generate one query means generate one row, then next query and next row
+    #     dataNew = pd.DataFrame(
+    #         columns=[f"col_{i}" for i in range(self.n_column)],
+    #         index=[i for i in range(self.n_row)],
+    #     )
+    #     dataNew[:] = sys.maxsize
+    #     ops = np.array([["<="]] * self.n_column, dtype=object)
+    #     count = 0
+    #     for i in tqdm(range(grid.shape[0])):
+    #         grid_value = grid[i]
+    #         vals = grid_value.reshape(-1, 1)
+    #         table = common.CsvTable("dataNew", dataNew, dataNew.columns)
+    #         dataNew_cols = table.columns
+    #         card_current = cal_true_card((dataNew_cols, None, ops, vals), table)
+    #         xi = pred[i][0] * self.n_row - card_current
+    #         # Case 1: change 0.8 to 0, 1.8 to 1,
+    #         card = int(xi)
+    #         if card >= 1:
+    #             if count + card > self.n_row or (
+    #                 count + card == self.n_row and i != grid.shape[0] - 1
+    #             ):
+    #                 print(
+    #                     f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {grid[i]}, stop generation."
+    #                 )
+    #                 dataNew.iloc[count:, :] = grid_value
+    #                 break
+    #             else:
+    #                 dataNew.iloc[count : count + card, :] = grid_value
+    #                 count += card
+    #     else:
+    #         print("Finished table generation")
+    #     dataNew.dropna(axis=0, how="all", inplace=True)
+    #     return dataNew
 
-            if card >= 1:
-                # Case 2: change 0.8 to 0, 1.8 to 2
-                # if int(xi) >= 1:
-                # card = np.round(xi).astype("int")
-                # floor = np.floor(xi)
-                # ceil = np.ceil(xi)
-                # if floor == ceil:
-                #     card = int(xi)
-                # else:
-                #     card = np.random.choice([floor, ceil], p=[xi - floor, ceil - xi]).astype("int")
+    # def generate_3(self, grid, pred=None):
+    #     # common.CsvTable / cal_true_card / pd.concat
+    #     if pred is None:
+    #         pred = self.predict(grid)
+    #     assert pred.shape[0] == grid.shape[0]
+    #     # generate by row, one query may generate several rows
+    #     dataNew = pd.DataFrame(columns=[f"col_{i}" for i in range(self.n_column)])
+    #     ops = np.array([["<="]] * self.n_column, dtype=object)
+    #     count = 0
+    #     for i in tqdm(range(grid.shape[0])):
+    #         grid_value = grid[i]
+    #         vals = grid_value.reshape(-1, 1)
+    #         table = common.CsvTable("dataNew", dataNew, dataNew.columns)
+    #         dataNew_cols = table.columns
+    #         card_current = cal_true_card((dataNew_cols, None, ops, vals), table)
+    #         xi = pred[i][0] * self.n_row - card_current
+    #         # Case 1: change 0.8 to 0, 1.8 to 1,
+    #         card = int(xi)
+    #         if card >= 1:
+    #             # Case 2: change 0.8 to 0, 1.8 to 2
+    #             # if int(xi) >= 1:
+    #             # card = np.round(xi).astype("int")
+    #             # floor = np.floor(xi)
+    #             # ceil = np.ceil(xi)
+    #             # if floor == ceil:
+    #             #     card = int(xi)
+    #             # else:
+    #             #     card = np.random.choice([floor, ceil], p=[xi - floor, ceil - xi]).astype("int")
+    #             if count + card > self.n_row or (
+    #                 count + card == self.n_row and i != grid.shape[0] - 1
+    #             ):
+    #                 print(
+    #                     f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {grid[i]}, stop generation."
+    #                 )
+    #                 left_row = self.n_row - count
+    #                 df3 = pd.DataFrame(
+    #                     {f"col_{k}": np.tile(grid_value[k], left_row) for k in range(self.n_column)}
+    #                 )
+    #                 dataNew = pd.concat([dataNew, df3], ignore_index=True)
+    #                 break
+    #             else:
+    #                 df3 = pd.DataFrame(
+    #                     {f"col_{k}": np.tile(grid_value[k], card) for k in range(self.n_column)}
+    #                 )
+    #                 dataNew = pd.concat([dataNew, df3], ignore_index=True)
+    #                 count += card
+    #     else:
+    #         print("Finished table generation")
+    #     return dataNew
 
-                if count + card > self.n_row or (
-                    count + card == self.n_row and i != grid.shape[0] - 1
-                ):
-                    print(
-                        f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {grid[i]}, stop generation."
-                    )
-                    dataNew.iloc[count:, :] = grid_value
-                    break
-                else:
-                    dataNew.iloc[count : count + card, :] = grid_value
-                    count += card
-        else:
-            print("Finished table generation")
-        dataNew.dropna(axis=0, how="all", inplace=True)
-        return dataNew
+    # def generate_4(self, grid, pred=None):
+    #     # df / calculate_query_cardinality / np.concatenate
+    #     if pred is None:
+    #         pred = self.predict(grid)
+    #     assert pred.shape[0] == grid.shape[0]
+    #     # generate by row, one query may generate several rows
+    #     column_names = [f"col_{i}" for i in range(self.n_column)]
+    #     dataNew = pd.DataFrame(columns=column_names)
+    #     ops = ["<="] * self.n_column
 
-    def generate_3(self, grid, pred=None):
-        # 使用 common.CsvTable / cal_true_card / pd.concat
-        # 比前两种都快
-        if pred is None:
-            pred = self.predict(grid)
-        assert pred.shape[0] == grid.shape[0]
-        # generate by row, one query may generate several rows
-        dataNew = pd.DataFrame(columns=[f"col_{i}" for i in range(self.n_column)])
-        ops = np.array([["<="]] * self.n_column, dtype=object)
-        count = 0
-        for i in tqdm(range(grid.shape[0])):
-            grid_value = grid[i]
-            vals = grid_value.reshape(-1, 1)
-            table = common.CsvTable("dataNew", dataNew, dataNew.columns)
-            dataNew_cols = table.columns
-            card_current = cal_true_card((dataNew_cols, None, ops, vals), table)
-            xi = pred[i][0] * self.n_row - card_current
+    #     count = 0
+    #     ArrayNew = None
+    #     pred = (pred * self.n_row).astype(int)  # Case 1: change 0.8 to 0, 1.8 to 1
+    #     for i in tqdm(range(grid.shape[0])):
+    #         vals = grid[i]
+    #         card = pred[i, 0] - calculate_query_cardinality_df(dataNew, ops, vals)
 
-            # Case 1: change 0.8 to 0, 1.8 to 1,
-            card = int(xi)
-
-            if card >= 1:
-                # Case 2: change 0.8 to 0, 1.8 to 2
-                # if int(xi) >= 1:
-                # card = np.round(xi).astype("int")
-                # floor = np.floor(xi)
-                # ceil = np.ceil(xi)
-                # if floor == ceil:
-                #     card = int(xi)
-                # else:
-                #     card = np.random.choice([floor, ceil], p=[xi - floor, ceil - xi]).astype("int")
-
-                if count + card > self.n_row or (
-                    count + card == self.n_row and i != grid.shape[0] - 1
-                ):
-                    print(
-                        f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {grid[i]}, stop generation."
-                    )
-                    left_row = self.n_row - count
-                    df3 = pd.DataFrame(
-                        {f"col_{k}": np.tile(grid_value[k], left_row) for k in range(self.n_column)}
-                    )
-
-                    # dataNew = dataNew.append(df3, ignore_index = True)
-                    dataNew = pd.concat([dataNew, df3], ignore_index=True)
-                    break
-                else:
-                    df3 = pd.DataFrame(
-                        {f"col_{k}": np.tile(grid_value[k], card) for k in range(self.n_column)}
-                    )
-                    # dataNew = dataNew.append(df3, ignore_index = True)
-                    dataNew = pd.concat([dataNew, df3], ignore_index=True)
-                    count += card
-        else:
-            print("Finished table generation")
-        # dataNew.dropna(axis=0, how="all", inplace=True)
-        return dataNew
-
-    def generate_4(self, grid, pred=None):
-        # 使用 df / calculate_query_cardinality / np.concatenate
-        if pred is None:
-            pred = self.predict(grid)
-        assert pred.shape[0] == grid.shape[0]
-        # generate by row, one query may generate several rows
-        column_names = [f"col_{i}" for i in range(self.n_column)]
-        dataNew = pd.DataFrame(columns=column_names)
-        ops = ["<="] * self.n_column
-
-        count = 0
-        ArrayNew = None
-        pred = (pred * self.n_row).astype(int)  # Case 1: change 0.8 to 0, 1.8 to 1
-        for i in tqdm(range(grid.shape[0])):
-            vals = grid[i]
-            card = pred[i, 0] - calculate_query_cardinality(dataNew, ops, vals)
-
-            if card >= 1:
-                array3 = np.repeat(vals, card).reshape(self.n_column, card).T
-                ArrayNew = (
-                    array3 if ArrayNew is None else np.concatenate((ArrayNew, array3), axis=0)
-                )
-                dataNew = pd.DataFrame(ArrayNew, columns=column_names)
-                count += card
-                if count > self.n_row:
-                    print(
-                        f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {vals}, stop generation."
-                    )
-                    break
-        else:
-            print("Completed table generation")
-            # if count < n_row:
-            #     print(
-            #         f"Reached table max row length({n_row}) in the last row of grid, stop generation."
-            #     )
-            #     # 如果不足需要补 系统最大值
-            #     # dataNew = pd.DataFrame(ArrayNew, columns=column_names)
-            return dataNew
-        return dataNew.iloc[: self.n_row, :]
+    #         if card >= 1:
+    #             array3 = np.repeat(vals, card).reshape(self.n_column, card).T
+    #             ArrayNew = (
+    #                 array3 if ArrayNew is None else np.concatenate((ArrayNew, array3), axis=0)
+    #             )
+    #             dataNew = pd.DataFrame(ArrayNew, columns=column_names)
+    #             count += card
+    #             if count > self.n_row:
+    #                 print(
+    #                     f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {vals}, stop generation."
+    #                 )
+    #                 break
+    #     else:
+    #         print("Completed table generation")
+    #         # if count < n_row:
+    #         #     print(
+    #         #         f"Reached table max row length({n_row}) in the last row of grid, stop generation."
+    #         #     )
+    #         #     # 如果不足需要补 系统最大值
+    #         #     # dataNew = pd.DataFrame(ArrayNew, columns=column_names)
+    #         return dataNew
+    #     return dataNew.iloc[: self.n_row, :]
 
     def generate_5(self, grid, pred=None):
-        # 使用 numpy / calculate_query_cardinality_numpy / np.concatenate
+        # numpy / calculate_query_cardinality_numpy / np.concatenate
         if pred is None:
             pred = self.predict(grid)
         assert pred.shape[0] == grid.shape[0]
@@ -423,10 +404,9 @@ class LatticeCDF:
         ArrayNew = None
         ops = ["<="] * self.n_column
         pred = (pred * self.n_row).astype(int)  # Case 1: change 0.8 to 0, 1.8 to 1
-        column_names = [f"col_{i}" for i in range(self.n_column)]
         for i in tqdm(range(grid.shape[0])):
             vals = grid[i]
-            card = pred[i, 0] - calculate_query_cardinality_numpy(ArrayNew, ops, vals)
+            card = pred[i, 0] - calculate_query_cardinality(ArrayNew, ops, vals)
             if card >= 1:
                 array3 = np.repeat(vals, card).reshape(self.n_column, card).T
                 ArrayNew = (
@@ -442,9 +422,8 @@ class LatticeCDF:
             print("Completed table generation")
             # if count < n_row:
             #     print(
-            #         f"Reached table max row length({n_row}) in the last row of grid, stop generation."
+            #         f"Generated table row length({count}) is less than the original table row length({self.n_row})."
             #     )
-            #     # 如果不足需要补 系统最大值
-            #     # dataNew = pd.DataFrame(ArrayNew, columns=column_names)
-            return pd.DataFrame(ArrayNew, columns=column_names)
-        return pd.DataFrame(ArrayNew, columns=column_names).iloc[: self.n_row, :]
+            #     # 如果不足,补系统最大值吗？
+            return ArrayNew
+        return ArrayNew[: self.n_row, :]
