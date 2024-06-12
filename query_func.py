@@ -78,28 +78,25 @@ def calculate_query_cardinality(data, ops, vals):
 
 
 def calculate_Q_error(dataNew, query_set, table_size):
+    print("Begin Calculating Q-error ...")
     Q_error = []
-    n_row = table_size[0]
-    our_table_row = dataNew.shape[0]
-
     for query in tqdm(query_set):
         idxs, ops, vals, sel_true = query
         cols = dataNew[:, idxs]
-        sel_pred = calculate_query_cardinality(cols, ops, vals) / our_table_row
-        if sel_pred == 0 and sel_pred == 0:
-            Q_error.append(1)
-            continue
-        if sel_pred == 0:
-            sel_pred = 1 / our_table_row
-        elif sel_true == 0:
-            sel_true = 1 / n_row
-        Q_error.append(max(sel_pred / sel_true, sel_true / sel_pred))
+        card_pred = calculate_query_cardinality(cols, ops, vals)
+        card_true = sel_true * table_size[0]
+        if card_pred == 0:
+            card_pred = 1
+        if card_true == 0:
+            card_true = 1
+        Q_error.append(max(card_pred / card_true, card_true / card_pred))
+    print("Done.\n")
     return Q_error
 
 
 def print_Q_error(Q_error, args, savepath):
     print(
-        f"\n\n Q-error of Lattice (dataset={args.dataset}, query size={args.query_size}, condition=[{args.min_conditions}, {args.max_conditions}], loss={args.loss}):\n"
+        f"dataset={args.dataset}, query size={args.query_size}, condition=[{args.min_conditions}, {args.max_conditions}], loss={args.loss}):\n"
     )
     statistics = {
         "min": np.min(Q_error),
@@ -117,7 +114,7 @@ def print_Q_error(Q_error, args, savepath):
         "max": np.max(Q_error),
         "mean": np.mean(Q_error),
     }
-    df = pd.DataFrame.from_dict(statistics, orient="index", columns=["Value"])
+    df = pd.DataFrame.from_dict(statistics, orient="index", columns=["Q-error"])
     df.index.name = None
-    df.to_csv(f"{savepath}/Qerror.csv", index=True, header=False)
+    df.to_csv(f"{savepath}/Q_error.csv", index=True, header=False)
     print(df)
