@@ -421,7 +421,58 @@ class PWLLattice:
                     break
         else:
             print("Done.\n")
-            # if count < n_row:
+            # if count < self.n_row:
+            #     print(
+            #         f"Generated table row length({count}) is less than the original table row length({self.n_row})."
+            #     )
+            #     # 如果不足,补系统最大值吗？
+            return ArrayNew
+        return ArrayNew[: self.n_row, :]
+
+    def _generate_grid_batches(self, values, batch_size):
+        iterator = itertools.product(*values)
+        while True:
+            batch = list(itertools.islice(iterator, batch_size))
+            if not batch:
+                break
+            yield np.array(batch).astype(np.float32)
+
+    def generate_6(self, unique_intervals, batch_size=10000):
+        print(f"Begin Generating Table from Batches ({batch_size=}) ...")
+        values = [v for v in unique_intervals.values()]
+        total_combinations = np.prod([len(v) for v in values])
+        ArrayNew = None
+        for grid_batch in tqdm(
+            self._generate_grid_batches(values, batch_size),
+            total=(total_combinations // batch_size) + 1,
+        ):
+            pred_batch = self.predict(grid_batch)
+            ArrayNew = self.generate_from_batches(grid_batch, pred_batch, ArrayNew)
+        print("Done.\n")
+        return ArrayNew
+
+    def generate_from_batches(self, grid_batch, pred_batch, ArrayNew=None):
+        # generate by row, one query may generate several rows
+        count = 0 if ArrayNew is None else ArrayNew.shape[0]
+        ops = ["<="] * self.n_column
+        pred_batch = (pred_batch * self.n_row).astype(int)  # Case 1: change 0.8 to 0, 1.8 to 1
+        # for i in tqdm(range(grid_batch.shape[0])):
+        for i in range(grid_batch.shape[0]):
+            vals = grid_batch[i]
+            card = pred_batch[i, 0] - calculate_query_cardinality(ArrayNew, ops, vals)
+            if card >= 1:
+                array3 = np.repeat(vals, card).reshape(self.n_column, card).T
+                ArrayNew = (
+                    array3 if ArrayNew is None else np.concatenate((ArrayNew, array3), axis=0)
+                )
+                count += card
+                if count > self.n_row:
+                    print(
+                        f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {vals}, stop generation."
+                    )
+                    break
+        else:
+            # if count < self.n_row:
             #     print(
             #         f"Generated table row length({count}) is less than the original table row length({self.n_row})."
             #     )
