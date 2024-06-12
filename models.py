@@ -17,14 +17,14 @@ from query_func import *
 class PWLLattice:
     def __init__(
         self,
-        modelPath,
+        path,
         table_shape,
         unique_intervals,
         pwl_keypoints=None,  # also can input table unique values
         lattice_size=2,
     ):
         self.name = "PWLLattice"
-        self.modelPath = modelPath
+        self.path = path
         self.n_row = table_shape[0]
         self.n_column = table_shape[1]
         self.dim = len(unique_intervals.keys())
@@ -33,8 +33,8 @@ class PWLLattice:
         self.pwl_calibration_input_keypoints = (
             unique_intervals if pwl_keypoints is None else pwl_keypoints
         )
-        self.model_path = f"{self.modelPath}/{self.name}_model"
-        self.weight_path = f"{self.modelPath}/{self.name}_weight"
+        self.model_path = f"{self.path}/{self.name}_model"
+        self.weight_path = f"{self.path}/{self.name}_weight"
         # self.sample_feat = None
 
         self.model_inputs = []
@@ -165,17 +165,21 @@ class PWLLattice:
             lossFunc = tf.keras.losses.mean_absolute_percentage_error
 
         # self.model.compile(loss=lossFunc, optimizer="adam", metrics=["accuracy"])
-        self.model.compile(loss=lossFunc, optimizer=tf.keras.optimizers.Adam(lr))
+        self.model.compile(loss=lossFunc, optimizer=tf.keras.optimizers.Adamax(lr))
 
         earlyStopping = tf.keras.callbacks.EarlyStopping(
-            monitor="loss", patience=100, verbose=verbose, mode="min", restore_best_weights=True
+            restore_best_weights=True,
+            monitor="loss",
+            mode="min",
+            patience=100,
+            verbose=verbose,
         )
         mcp_save = tf.keras.callbacks.ModelCheckpoint(
-            filepath=f"{self.weight_path}.hdf5",
+            filepath=f"{self.weight_path}.h5",
+            save_weights_only=True,
             save_best_only=True,
             monitor="loss",
             mode="min",
-            save_weights_only=True,
             verbose=1,
         )
         reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(
@@ -183,7 +187,7 @@ class PWLLattice:
             factor=reduceLR_factor,
             patience=reduceLR_patience,
             verbose=verbose,
-            epsilon=1e-10,
+            min_delta=1e-10,
             mode="min",
         )
 
@@ -195,16 +199,12 @@ class PWLLattice:
             verbose=1,
             callbacks=[earlyStopping, mcp_save, reduce_lr_loss],
         )
-        self.model.save(f"{self.model_path}.h5")
+        self.model.save(f"{self.model_path}")
 
     def load(self, modelPath=None, summary=False):
-        if modelPath:
-            # self.model_path = f"{self.modelPath}/{self.name}_model"
-            # self.weight_path = f"{self.modelPath}/{self.name}_weight"
-            self.model = tf.keras.models.load_model(f"{modelPath}/{self.name}_model.h5")
-            self.model.load_weights(f"{modelPath}/{self.name}_weight.hdf5")
-        else:
-            self.model.load_weights(f"{self.weight_path}.hdf5")
+        Path = modelPath if modelPath else self.path
+        self.model = tf.keras.models.load_model(f"{Path}/{self.name}_model")
+        # self.model.load_weights(f"{Path}/{self.name}_weight.h5")
         if summary:
             print(self.model.summary())
 
@@ -400,6 +400,7 @@ class PWLLattice:
             pred = self.predict(grid)
         assert pred.shape[0] == grid.shape[0]
         # generate by row, one query may generate several rows
+        print("Begin Generating Table ...")
         count = 0
         ArrayNew = None
         ops = ["<="] * self.n_column
@@ -419,7 +420,7 @@ class PWLLattice:
                     )
                     break
         else:
-            print("Completed table generation")
+            print("Done.\n")
             # if count < n_row:
             #     print(
             #         f"Generated table row length({count}) is less than the original table row length({self.n_row})."
