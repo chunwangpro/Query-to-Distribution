@@ -1,18 +1,21 @@
 # Learning Data Distribution from Queries
+
 ## Basic Usage
+
 ### Single Table
 
-#### LPALG
 ```bash
-python query2distributeLPALG.py --dataset wine --device cpu --query-size 5 --num-conditions 2 --lr 2e-4
+python PWLLattice.py --dataset wine2 --query-size 1000000 --num-conditions 2 --epochs 1000
 ```
 
-#### 代码说明 ipynb
+### LPALG
+```bash
+python LPALG.py --dataset wine --query-size 5 --num-conditions 2
+```
 
-- LPALGv1.0     ---- 第一版稳定运行 Baseline
-- LPALGv2.0     ---- 第二版稳定运行 Baseline
-- Lattice           ----- 师姐提供的 Lattice 代码
-- Lattice_wine_2    ----- 可视化代码
-- Lattice_v1.0 ----- 第一版可以稳定运行
-  - 只采用 input - PWL - lattice 的网络
-- Lattice_wine_2-Copy1    -----  一些改进
+## 代码说明
+
+- LPALG.py          ----- Baseline of LPALG (PGM)
+- PWLLattice.py     ----- PWL-Lattice 网络
+- query_func.py     ----- query related functions (rewrite by numpy)
+- models.py         ----- models
