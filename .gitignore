@@ -1,2 +1,9 @@
 __pycache__
 .DS_Store
+.ipynb_checkpoints
+*.hdf5
+*.h5
+
+# saved models and results folders
+results/
+saved_models/
