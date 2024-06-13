@@ -1,6 +1,8 @@
 # This is the implementation of LPALG(PGM) algorithm for query optimization.
 # "Data generation using declarative constraints"
+import warnings
 
+warnings.filterwarnings("ignore")
 import argparse
 import itertools
 import sys
@@ -70,7 +72,7 @@ def SampleTupleThenRandom(table, num_filters, rng, dataset):
     return cols, idxs, pd.DataFrame(op_a).values, pd.DataFrame(val_a).values
 
 
-# LPALG
+# LPALG (PGM) algorithm
 def dictionary_column_interval(table_size, query_set):
     # Traverse all queries to apply the intervalization skill for each column
     n_column = table_size[1]
@@ -93,8 +95,8 @@ def dictionary_column_interval(table_size, query_set):
 def dictionary_column_variable(column_to_interval):
     # Assign a sequential index to each interval in each column
     column_to_variable = {}
-    total_intervals = 0  # count how many intervals in total
-    column_variable_number = []  # count how many intervals in each column
+    total_intervals = 0
+    column_variable_number = []
     for k, v in column_to_interval.items():
         count = len(v)
         column_to_variable[k] = [total_intervals + i for i in range(count)]
@@ -172,21 +174,28 @@ def transfer_x_index(query_to_x_index, column_variable_number):
     return x_index
 
 
-# Build Minimize Problem
 def x0():
+    # use average value to initialize the x: n_row / total_x
     return np.ones(total_x) * n_row / total_x
 
 
 def bounds():
+    # each x should be in [0, n_row]
     return np.array([[0, n_row]] * total_x)
 
 
 def constraints():
+    # constraints is always limited to zero when using SLSQP
+    # sum of all x should always equal to n_row
     return [{"type": "eq", "fun": lambda x: n_row - x.sum()}]
 
 
 def query_constraints(query_set, x_index, column_variable_number):
     query_constraints_list = []
+    # Find the corresponding x (then sum) for each query
+    # because x may be a array with multiple dimensions(such as 10), build and store such big matrix is not feasible
+    # so we use a 1D array to represent the x, and use the following method to find the corresponding x index
+    # To be simple: 5D array [2, 3, 4, 5, 6] -> 1D array [x_ind @ find]
     find = np.array(
         [np.product(column_variable_number[i:]) for i in range(1, len(column_variable_number))]
         + [1]
@@ -194,11 +203,13 @@ def query_constraints(query_set, x_index, column_variable_number):
     for key, values in x_index.items():
         sel = query_set[key][4]
         x_ind = np.array([x for x in itertools.product(*values)])  # , dtype=np.uint16)
-        result = np.dot(x_ind, find)  # same as x_ind @ find
+        result = x_ind @ find
 
         def value_constraints(x, sel=sel, value=result):
+            # the cardinality-error of a query
             return x[value].sum() - sel * n_row
 
+        # sparse matrix csr_matrix
         #         row = np.zeros(len(result))
         #         col = result
         #         data = np.ones(len(result))
@@ -212,12 +223,15 @@ def query_constraints(query_set, x_index, column_variable_number):
 
 def fun():
     def error(x):
+        # reduce the total cardinality-error of a query to zeros
+        # divided by n_row or (n_row)**2 to limit the error to a small range
         return sum([constraint(x) ** 2 for constraint in query_constraints_list]) / (n_row)  # **2
 
     return error
 
 
 def randomized_rouding(x):
+    # with probability to shift to interval left or right points
     int_x = deepcopy(x)
     for i in range(len(x)):
         xi = x[i]
@@ -249,6 +263,7 @@ def generate_table_data(column_to_interval, int_x, column_variable_number):
 
 
 def execute_query(dataNew, query_set):
+    # calculate the Q-error of each query
     diff = []
     for query in query_set:
         sentence = ""
@@ -262,7 +277,7 @@ def execute_query(dataNew, query_set):
                 sentence += query[2][i][0]
             sentence += f"{query[3][i][0]}"
         sel = dataNew.query(sentence).shape[0] / dataNew.shape[0]
-        sel2 = query[4]  # round(query[4] * n_row)
+        sel2 = query[4]
         if sel == 0:
             sel += 1 / dataNew.shape[0]
         if sel2 == 0:
@@ -285,38 +300,40 @@ if __name__ == "__main__":
     except:
         args, unknown = parser.parse_known_args()  # for jupyter notebook
 
-    table = datasets.LoadDataset(f"{args.dataset}.csv", args.dataset, type_casts={})
-
-    print("Begin Generating Queries ...")
+    print("\nBegin Generating Queries ...")
     rng = np.random.RandomState(42)
+    table = datasets.LoadDataset(f"{args.dataset}.csv", args.dataset, type_casts={})
     query_set = [
         GenerateQuery(table, 2, args.num_conditions + 1, rng, args.dataset)
         for _ in range(args.query_size)
     ]
-    print("Complete Generating Queries.")
+    print("Done.\n")
 
-    print("\n\nBuilding LPALG...")
+    print("\nBegin Building LPALG (PGM) Model ...")
     tic = time.time()
     table_size = table.data.shape
-    n_row = table_size[0]
-    n_column = table_size[1]
+    n_row, n_column = table_size
 
     column_to_interval = dictionary_column_interval(table_size, query_set)
+
     total_intervals, column_variable_number, column_to_variable = dictionary_column_variable(
         column_to_interval
     )
     variable_to_interval = dictionary_variable_interval(column_to_interval, column_to_variable)
 
     total_x = np.product(column_variable_number)
+
     query_to_interval = dictionary_query_to_interval(
         query_set, column_to_interval, column_to_variable
     )
     query_to_x_index = dictionary_query_to_x_index(query_set, query_to_interval, column_to_variable)
+
     x_index = transfer_x_index(query_to_x_index, column_variable_number)
+
     query_constraints_list = query_constraints(query_set, x_index, column_variable_number)
     print("Done.\n")
 
-    print(f"Solving LP problem with total param = {total_x} ...")
+    print(f"Begin Solving LP problem with total param = {total_x} ...")
     res = optimize.minimize(
         fun(),
         x0(),
@@ -325,20 +342,25 @@ if __name__ == "__main__":
         bounds=bounds(),
         # tol=1e-323,
         # options={'maxiter': 1e10},
-        # options={'maxiter': 1},
+        # options={'maxiter': 1}, # only for checking the algorithm works
     )
     print("\n Optimize.minimize Solver Status: \n", res)
+
+    print("\nBegin Generating Data ...")
     int_x = randomized_rouding(res.x).astype(int)
     print(f"\n Integer X: ( length = {len(int_x)} )\n", int_x)
 
-    # generate data
     dataNew = generate_table_data(column_to_interval, int_x, column_variable_number)
     # print(dataNew)
+    print("Done.\n")
 
-    # calculate error
+    print("\nBegin Calculate Query Error ...")
     diff = execute_query(dataNew, query_set)
+    print("Done.\n")
+
+    print(f"\n\n Q-error of LPALG (PGM) algorithm:")
     print(
-        f"\n\n Q-error of LPALG (query size={args.query_size}, condition={args.num_conditions}, total param={total_x}):\n"
+        f"  (dataset={args.dataset}, query_size={args.query_size}, condition={args.num_conditions}, total_param={total_x}):\n"
     )
     print(f"min:    {np.min(diff)}")
     print(f"10:     {np.percentile(diff, 10)}")
@@ -352,6 +374,7 @@ if __name__ == "__main__":
     print(f"mean:   {np.mean(diff)}")
     print(f"90:     {np.percentile(diff, 90)}")
     print(f"max:    {np.max(diff)}")
+
     toc = time.time()
     total_time = toc - tic
     m, s = divmod(total_time, 60)
