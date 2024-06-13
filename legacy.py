@@ -644,7 +644,7 @@ if __name__ == "__main__":
     make_directory(resultsPath)
     make_directory(modelPath)
 
-    table = datasets.LoadDataset(f"datasets/{args.dataset}.csv", args.dataset)
+    table = datasets.LoadDataset(f"{args.dataset}.csv", args.dataset)
 
     print("Begin Generating Queries Set...")
     rng = np.random.RandomState(args.seed)
