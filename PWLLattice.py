@@ -1,3 +1,13 @@
+# PWL - Lattice numpy Version
+# PWL - Lattice model is an 1-input model
+
+# Query Phase:
+## calculate_query_cardinality_numpy
+
+# Generation Phase:
+## generate_from_batches / np.concatenate
+
+# no Plottings
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -86,7 +96,7 @@ train_X = np.array(train_X).astype(np.float32)
 train_Y = np.array([[query[-1]] for query in query_set], dtype=np.float32)
 
 
-# 可以PWL改成三次样条吗
+# PWL改成三次样条
 m = PWLLattice(
     modelPath,
     table_size,
