@@ -80,11 +80,12 @@ def calculate_query_cardinality(data, ops, vals):
 def calculate_Q_error(dataNew, query_set, table_size):
     print("Begin Calculating Q-error ...")
     Q_error = []
+    n_row = table_size[0]
     for query in tqdm(query_set):
         idxs, ops, vals, sel_true = query
         cols = dataNew[:, idxs]
         card_pred = calculate_query_cardinality(cols, ops, vals)
-        card_true = sel_true * table_size[0]
+        card_true = sel_true * n_row
         if card_pred == 0:
             card_pred = 1
         if card_true == 0:
@@ -95,8 +96,9 @@ def calculate_Q_error(dataNew, query_set, table_size):
 
 
 def print_Q_error(Q_error, args, savepath):
+    print("Summary of Q-error:")
     print(
-        f"dataset={args.dataset}, query size={args.query_size}, condition=[{args.min_conditions}, {args.max_conditions}], loss={args.loss}):\n"
+        f"dataset={args.dataset}, query size={args.query_size}, condition=[{args.min_conditions}, {args.max_conditions}], loss={args.loss}):"
     )
     statistics = {
         "min": np.min(Q_error),
