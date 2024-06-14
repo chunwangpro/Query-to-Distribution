@@ -5,7 +5,7 @@
 ### Single Table
 
 ```bash
-python PWLLattice.py --dataset wine2 --query-size 100000 --max-conditions 2 --epochs 1000
+python PWLLattice.py --dataset wine2 --query-size 100000 --min-conditions 1 --max-conditions 2 --epochs 2000 --bs 10000 --loss MSE
 ```
 
 ### LPALG (PGM)

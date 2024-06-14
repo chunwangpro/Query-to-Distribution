@@ -681,14 +681,14 @@ class PWLLattice:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, default="wine2", help="Dataset.")
-    parser.add_argument("--query-size", type=int, default=1000, help="query size")
-    parser.add_argument("--min-conditions", type=int, default=2, help="min num of conditions")
+    parser.add_argument("--query-size", type=int, default=100000, help="query size")
+    parser.add_argument("--min-conditions", type=int, default=1, help="min num of conditions")
     parser.add_argument("--max-conditions", type=int, default=2, help="max num of conditions")
     parser.add_argument("--epochs", type=int, default=2000, help="Number of epochs to train for.")
-    parser.add_argument("--bs", type=int, default=1000, help="Batch size.")
+    parser.add_argument("--bs", type=int, default=10000, help="Batch size.")
     parser.add_argument("--loss", type=str, default="MSE", help="Loss.")
     parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size.")
-    parser.add_argument("--lr", type=float, default=1e-2, help="learning rate")
+    parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
 
     try:
