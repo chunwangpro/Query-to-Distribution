@@ -7,7 +7,7 @@ OPS = {">": np.greater, "<": np.less, ">=": np.greater_equal, "<=": np.less_equa
 
 def generate_random_query(table, min_conditions, max_conditions, rng):
     """Generate a random query."""
-    conditions = rng.randint(min_conditions, max_conditions)
+    conditions = rng.randint(min_conditions, max_conditions + 1)
     idxs = rng.choice(table.shape[1], replace=False, size=conditions)
     idxs = np.sort(idxs)
     cols = table[:, idxs]
@@ -18,29 +18,28 @@ def generate_random_query(table, min_conditions, max_conditions, rng):
     return idxs, ops, vals, sel
 
 
-# 修改区间对 > >= < = 均适用
-# 修改 初始interval/好像不用改
-# 修改空interval使用【1】
-# 修改最小值最大值为：min/2， max+max-max_2
-def column_intervalization(table_size, query_set):
-    # Traverse all queries to apply the intervalization skill for each column
-    column_interval = {}
-    for i in range(table_size[1]):
-        column_interval[i] = set()  # use set([0, sys.maxsize]) to adapt '>' and '<'.
+def column_intervalization(query_set, table_size):
+    # apply the query intervalization for each column
+    # applied to <, <=, >, >=, =
+    column_interval = {i: set() for i in range(table_size[1])}
     for query in query_set:
         idxs, _, vals, _ = query
         for i in range(len(idxs)):
             column_interval[idxs[i]].add(vals[i])
     for k, v in column_interval.items():
         if not v:
-            column_interval[k] = [1]  # use [0] to represent empty column interval
+            # use [0] for empty column interval
+            column_interval[k] = [0]
         else:
-            column_interval[k] = sorted(list(v))
+            interval_list = sorted(list(v))
+            smallest = 2 * interval_list[0] - interval_list[1]
+            largest = 2 * interval_list[-1] - interval_list[-2]
+            column_interval[k] = [smallest] + interval_list + [largest]
     return column_interval
 
 
 def count_column_unique_interval(unique_intervals):
-    # count unique query interval for each column
+    # count unique query interval number for each column
     return [len(v) for v in unique_intervals.values()]
 
 
@@ -53,7 +52,7 @@ def calculate_query_cardinality(data, ops, vals):
     Calculate the cardinality (number of rows) that satisfy a given query.
 
     Parameters:
-    data (np.ndarray): A 2D numpy array representing a subset of a table (cols).
+    data (np.ndarray): A 2D-array representing a subset of a table (cols).
     ops (list): A list of operators, support operators: '>', '>=', '<', '<=', '='.
     vals (list): A list of values.
 

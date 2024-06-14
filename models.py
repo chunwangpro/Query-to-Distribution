@@ -8,6 +8,36 @@ from tqdm import tqdm
 from query_func import *
 
 
+def build_train_set_1_input(query_set, unique_intervals):
+    train_X = []
+    for query in query_set:
+        x = [v[-1] for v in unique_intervals.values()]
+        idxs, _, vals, _ = query
+        for i in range(len(idxs)):
+            x[idxs[i]] = vals[i]
+        train_X.append(x)
+    train_X = np.array(train_X).astype(np.float32)
+    train_Y = np.array([[query[-1]] for query in query_set], dtype=np.float32)
+    return train_X, train_Y
+
+
+def build_train_set_2_input(query_set, unique_intervals):
+    train_X = []
+    for query in query_set:
+        x = [v[-1] for v in unique_intervals.values()]
+        idxs, _, vals, _ = query
+        for i in range(len(idxs)):
+            x[idxs[i]] = vals[i]
+        train_X.append(x)
+    train_X = np.array(train_X).astype(np.float32)
+    train_Y = np.array([[query[-1]] for query in query_set], dtype=np.float32)
+    return train_X, train_Y
+
+
+def build_boundary_2_input(query_set, unique_intervals):
+    pass
+
+
 class PWLLattice:
     def __init__(
         self,
@@ -202,11 +232,10 @@ class PWLLattice:
             print(self.model.summary())
 
     def predict(self, grid):
-        assert grid.shape[1] == self.dim
-        pred = self.model.predict(np.hsplit(grid, self.dim))
-        return pred
+        # assert grid.shape[1] == self.dim
+        return self.model.predict(np.hsplit(grid, self.dim))
 
-    def generate(self, unique_intervals, batch_size=10000):
+    def generate_by_row(self, unique_intervals, batch_size=10000):
         print(f"\nBegin Generating Table from Batches ({batch_size=}) ...")
         values = [v for v in unique_intervals.values()]
         total_combinations = np.prod([len(v) for v in values])
@@ -216,7 +245,7 @@ class PWLLattice:
             total=(total_combinations // batch_size) + 1,
         ):
             pred_batch = self.predict(grid_batch)
-            ArrayNew = self.generate_from_batches(grid_batch, pred_batch, ArrayNew)
+            ArrayNew = self._generate_from_batches(grid_batch, pred_batch, ArrayNew)
         if ArrayNew.shape[0] < self.n_row:
             print(
                 f"Generated table row length({ArrayNew.shape[0]}) is less than the original table row length({self.n_row})."
@@ -225,6 +254,7 @@ class PWLLattice:
         return ArrayNew
 
     def _generate_grid_batches(self, values, batch_size):
+        # use batches to avoid memory error
         iterator = itertools.product(*values)
         while True:
             batch = list(itertools.islice(iterator, batch_size))
@@ -232,7 +262,7 @@ class PWLLattice:
                 break
             yield np.array(batch).astype(np.float32)
 
-    def generate_from_batches(self, grid_batch, pred_batch, ArrayNew=None):
+    def _generate_from_batches(self, grid_batch, pred_batch, ArrayNew=None):
         # generate by row, one query may generate several rows
         count = 0 if ArrayNew is None else ArrayNew.shape[0]
         ops = ["<="] * self.n_column
