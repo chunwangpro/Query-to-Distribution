@@ -441,7 +441,7 @@ class PWLLattice:
 
         # generate 一条再query一条，再generate下一条
         count = 0
-        for i in trange(grid.shape[0]):
+        for i in tqdm(range(grid.shape[0])):
             sentence = ""
             for j in range(grid.shape[1]):
                 if j != 0:
@@ -781,40 +781,40 @@ if __name__ == "__main__":
     print_Q_error(Q_error, args)
 
     # Plottings:
-    pred = grid_pred
-    # plot-1
-    plt.figure(figsize=(20, 8))
-    plt.plot(pred, "bo")
-    plt.show()
-    # plot-2
-    fig1 = plt.figure(figsize=(15, 8))
-    ax1 = plt.axes(projection="3d")
-    # xx = unique_intervals[1]
-    # yy = unique_intervals[0]
-    # X, Y = np.meshgrid(xx, yy)
-    X = grid[:, 1].reshape(column_interval_number[0], column_interval_number[1])  # 这样也可以
-    Y = grid[:, 0].reshape(column_interval_number[0], column_interval_number[1])
-    Z = pred.reshape(column_interval_number[0], column_interval_number[1])
-    ax1.plot_surface(X, Y, Z, cmap="viridis")
-    plt.show()
-    # plot-3
-    fig2 = plt.figure(figsize=(10, 8))
-    ax2 = fig2.add_subplot(111)
-    cs = ax2.contourf(X, Y, Z, cmap="viridis")
-    # Alternatively, you can manually set the levels
-    # and the norm:
-    # lev_exp = np.arange(np.floor(np.log10(z.min())-1),
-    #                    np.ceil(np.log10(z.max())+1))
-    # levs = np.power(10, lev_exp)
-    # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
-    cbar = fig2.colorbar(cs)
-    plt.show()
-    # plot-4
-    # query 对网格的覆盖率 散点图
-    fig4 = plt.figure(figsize=(10, 10))
-    xtick = unique_intervals[0]
-    ytick = unique_intervals[1]
-    plt.scatter(train_X[:, 0], train_X[:, 1], c="b")
-    plt.vlines(xtick, min(ytick), max(ytick), colors="green")
-    plt.hlines(ytick, min(xtick), max(xtick), colors="green")
-    plt.show()
+    if grid_pred.shape[1] == 2:
+        pred = grid_pred
+        # plot-1
+        plt.figure(figsize=(20, 8))
+        plt.plot(pred, "bo")
+        plt.show()
+        # plot-2
+        fig1 = plt.figure(figsize=(15, 8))
+        ax1 = plt.axes(projection="3d")
+        # xx = unique_intervals[1]
+        # yy = unique_intervals[0]
+        # X, Y = np.meshgrid(xx, yy)
+        X = grid[:, 1].reshape(column_interval_number[0], column_interval_number[1])
+        Y = grid[:, 0].reshape(column_interval_number[0], column_interval_number[1])
+        Z = pred.reshape(column_interval_number[0], column_interval_number[1])
+        ax1.plot_surface(X, Y, Z, cmap="viridis")
+        plt.show()
+        # plot-3
+        fig2 = plt.figure(figsize=(10, 8))
+        ax2 = fig2.add_subplot(111)
+        cs = ax2.contourf(X, Y, Z, cmap="viridis")
+        # Alternatively, you can manually set the levels and the norm:
+        # lev_exp = np.arange(np.floor(np.log10(z.min())-1),
+        #                    np.ceil(np.log10(z.max())+1))
+        # levs = np.power(10, lev_exp)
+        # cs = ax.contourf(X, Y, z, levs, norm=colors.LogNorm())
+        cbar = fig2.colorbar(cs)
+        plt.show()
+        # plot-4
+        # query 对网格的覆盖率, 散点图
+        fig4 = plt.figure(figsize=(10, 10))
+        xtick = unique_intervals[0]
+        ytick = unique_intervals[1]
+        plt.scatter(train_X[:, 0], train_X[:, 1], c="b")
+        plt.vlines(xtick, min(ytick), max(ytick), colors="green")
+        plt.hlines(ytick, min(xtick), max(xtick), colors="green")
+        plt.show()

@@ -4,6 +4,9 @@ __pycache__
 *.hdf5
 *.h5
 
+# code_description
+README_code_description.md
+
 # saved models and results folders
 results/
 saved_models/
