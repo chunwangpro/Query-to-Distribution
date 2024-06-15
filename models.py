@@ -9,132 +9,170 @@ from query_func import *
 
 
 def build_train_set_1_input(query_set, unique_intervals):
-    train_X = []
+    X = []
     for query in query_set:
-        x = [v[-1] for v in unique_intervals.values()]
+        x = [v[-3] for v in unique_intervals.values()]
         idxs, _, vals, _ = query
-        for i in range(len(idxs)):
-            x[idxs[i]] = vals[i]
-        train_X.append(x)
-    train_X = np.array(train_X).astype(np.float32)
-    train_Y = np.array([[query[-1]] for query in query_set], dtype=np.float32)
-    return train_X, train_Y
+        for i, v in zip(idxs, vals):
+            x[i] = v
+        X.append(x)
+    X = np.array(X, dtype=np.float32)
+    y = np.array([query[-1] for query in query_set], dtype=np.float32).reshape(-1, 1)
+    return X, y
+
+
+def build_boundary_1_input(X, y, unique_intervals):
+    percent = 0.4
+    # make train set unique
+    train = np.hstack((X, y))
+    train = np.unique(train, axis=0)
+    # create boundary set
+    min_x = [v[0] for v in unique_intervals.values()]
+    max_x = [v[-3] for v in unique_intervals.values()]
+    border_x = np.array([min_x, max_x])
+    border_y = np.array([[0], [1]])
+    border = np.hstack((border_x, border_y))
+    # repeat boundary to raise weight
+    k = int(train.shape[0] / border.shape[0] * percent)
+    repeated_border = np.tile(border, (k, 1))
+    train = np.vstack((train, repeated_border))
+    # shuffle and split
+    np.random.shuffle(train)
+    X, y = np.hsplit(train, [X.shape[1]])
+    return X, y
 
 
 def build_train_set_2_input(query_set, unique_intervals):
-    train_X = []
+
+    def process_op_lt(x, idx, val):
+        x[idx * 2 + 1] = val
+
+    def process_op_le(x, idx, val):
+        ind = unique_intervals[idx].index(val) + 1
+        x[idx * 2 + 1] = unique_intervals[idx][ind]
+
+    def process_op_ge(x, idx, val):
+        x[idx * 2] = val
+
+    def process_op_gt(x, idx, val):
+        ind = unique_intervals[idx].index(val) + 1
+        x[idx * 2] = unique_intervals[idx][ind]
+
+    def process_op_eq(x, idx, val):
+        ind = unique_intervals[idx].index(val) + 1
+        x[idx * 2] = val
+        x[idx * 2 + 1] = unique_intervals[idx][ind]
+
+    op_functions = {
+        "<": process_op_lt,
+        "<=": process_op_le,
+        ">=": process_op_ge,
+        ">": process_op_gt,
+        "=": process_op_eq,
+    }
+    X = []
+    origin = [[v[0], v[-1]] for v in unique_intervals.values()]
     for query in query_set:
-        x = [v[-1] for v in unique_intervals.values()]
-        idxs, _, vals, _ = query
-        for i in range(len(idxs)):
-            x[idxs[i]] = vals[i]
-        train_X.append(x)
-    train_X = np.array(train_X).astype(np.float32)
-    train_Y = np.array([[query[-1]] for query in query_set], dtype=np.float32)
-    return train_X, train_Y
+        x = np.array(origin).ravel()
+        idxs, ops, vals, _ = query
+        for i, o, v in zip(idxs, ops, vals):
+            op_functions[o](x, i, v)
+        X.append(x)
+    X = np.array(X, dtype=np.float32)
+    y = np.array([query[-1] for query in query_set], dtype=np.float32).reshape(-1, 1)
+    return X, y
 
 
-def build_boundary_2_input(query_set, unique_intervals):
-    pass
+def build_boundary_2_input(X, y, unique_intervals):
+    percent = 0.4
+    # make train set unique
+    train = np.hstack((X, y))
+    train = np.unique(train, axis=0)
+    # create boundary set
+    # min_x = [v[0] for v in unique_intervals.values()]
+    # max_x = [v[-3] for v in unique_intervals.values()]
+    # border_x = np.array([min_x, max_x])
+    # border_y = np.array([[0], [1]])
+    # border = np.hstack((border_x, border_y))
+    # repeat boundary to raise weight
+    k = int(train.shape[0] / border.shape[0] * percent)
+    repeated_border = np.tile(border, (k, 1))
+    train = np.vstack((train, repeated_border))
+    # shuffle and split
+    np.random.shuffle(train)
+    X, y = np.hsplit(train, [X.shape[1]])
+    return X, y
 
 
 class PWLLattice:
     def __init__(
         self,
         path,
-        table_shape,
+        table_size,
         unique_intervals,
         pwl_keypoints=None,  # also can input table unique values
+        pwl_n=3,
         lattice_size=2,
     ):
         self.name = "PWLLattice"
         self.path = path
-        self.n_row = table_shape[0]
-        self.n_column = table_shape[1]
-        self.dim = len(unique_intervals.keys())
-        self.lattice_size = lattice_size
-        self.unique_intervals = unique_intervals
-        self.pwl_calibration_input_keypoints = (
-            unique_intervals if pwl_keypoints is None else pwl_keypoints
-        )
         self.model_path = f"{self.path}/{self.name}_model"
         self.weight_path = f"{self.path}/{self.name}_weight"
 
-        self.model_inputs = []
-        for i in range(self.dim):
-            self.model_inputs.append(tf.keras.layers.Input(shape=[1], name="col_%s" % i))
-            # self.model_inputs.append(
-            #     tf.keras.layers.Input(shape=[1], name='col%s_l' % i))
-            # self.model_inputs.append(
-            #     tf.keras.layers.Input(shape=[1], name='col%s_u' % i))
+        self.n_row, self.n_column = table_size
+        self.dim = self.n_column
+        self.unique_intervals = unique_intervals
 
-        self.calibrators = []
-        for i in range(self.dim):
-            # self.calibrators.append(
-            #     tfl.layers.PWLCalibration(
-            #         input_keypoints=np.linspace(
-            #             feat_mins[i],
-            #             feat_maxs[i],
-            #             num=pwl_calibration_num_keypoints),
-            #         dtype=tf.float32,
-            #         output_min=0.0,
-            #         output_max=lattice_size - 1.0,
-            #         monotonicity='decreasing',
-            #     ))
-            self.calibrators.append(
-                tfl.layers.PWLCalibration(
-                    input_keypoints=np.array(self.pwl_calibration_input_keypoints[i]),
-                    # input_keypoints=np.linspace(
-                    #     feat_mins[i],
-                    #     feat_maxs[i],
-                    #     num=pwl_calibration_num_keypoints),
-                    dtype=tf.float32,
-                    output_min=0.0,
-                    output_max=1.0,
-                    monotonicity="increasing",
-                )
+        self.pwl_n = pwl_n
+        self.pwl_keypoints = unique_intervals if pwl_keypoints is None else pwl_keypoints
+        self.lattice_size = (
+            [len(v) for v in unique_intervals.values()]
+            if lattice_size == 0
+            else [lattice_size] * self.dim
+        )
+
+        self.model_inputs = tf.keras.layers.Input(shape=[self.dim], name="input_layer")
+
+        def PWL(input_keypoints, col_idx, PWL_idx):
+            return tfl.layers.PWLCalibration(
+                input_keypoints=np.array(input_keypoints),
+                dtype=tf.float32,
+                output_min=0.0,
+                output_max=1.0,
+                monotonicity="increasing",
+                name=f"col_{col_idx}_PWL_{PWL_idx}",
             )
 
+        def column_PWL_layer(input_layer, col_idx, pwl_n, activation=False):
+            pwl_input = tf.keras.layers.Lambda(
+                lambda x: tf.expand_dims(x[:, col_idx], axis=-1), name=f"lambda_col_{col_idx}"
+            )(input_layer)
+            pwl_output = pwl_input
+            for j in range(pwl_n):
+                if j == 0:
+                    keypoints = self.pwl_keypoints[col_idx]
+                else:
+                    keypoints = np.linspace(0, 1, num=len(self.pwl_keypoints[col_idx]))
+                pwl_output = PWL(keypoints, col_idx, j + 1)(pwl_output)
+                if activation and j < pwl_n - 1:
+                    pwl_output = tf.keras.layers.Activation(
+                        "tanh", name=f"col_{col_idx}_tanh_{j+1}"
+                    )(pwl_output)
+            return pwl_output
+
+        self.lattice_inputs = [
+            column_PWL_layer(self.model_inputs, i, self.pwl_n) for i in range(self.dim)
+        ]
+
         self.lattice = tfl.layers.Lattice(
-            lattice_sizes=[lattice_size] * self.dim,  # (self.dim * 2),
-            interpolation="simplex",  # 可以尝试别的插值类型
-            monotonicities=["increasing"] * self.dim,  # (self.dim * 2),
+            lattice_sizes=self.lattice_size,
+            interpolation="simplex",  # "hypercube",
+            monotonicities=["increasing"] * self.dim,
             output_min=0.0,
             output_max=1.0,
             name="lattice",
         )
 
-        # self.output1 = tfl.layers.PWLCalibration(
-        #     input_keypoints=np.linspace(0.0,
-        #                                 np.log(self.n_row),
-        #                                 num=pwl_calibration_num_keypoints),
-        #     dtype=tf.float32,
-        #     output_min=0.0,
-        #     output_max=np.log(self.n_row),
-        #     name='output1_calib',
-        # )
-
-        # self.output2 = tfl.layers.PWLCalibration(
-        #     input_keypoints=np.linspace(0.0,
-        #                                 self.n_row,
-        #                                 num=pwl_calibration_num_keypoints),
-        #     dtype=tf.float32,
-        #     output_min=0.0,
-        #     output_max=self.n_row,
-        #     name='output2_calib',
-        # )
-
-        # self.lattice_inputs = []
-        # for i in range(self.dim):  # (self.dim) * 2):
-        #     self.lattice_inputs.append(self.calibrators[i](
-        #         self.model_inputs[i]))
-        # self.model_output = self.output2(
-        #     tf.keras.backend.exp(
-        #         self.output1(self.lattice(self.lattice_inputs))))
-
-        self.lattice_inputs = []
-        for i in range(self.dim):  # (self.dim) * 2):
-            self.lattice_inputs.append(self.calibrators[i](self.model_inputs[i]))
         self.model_output = self.lattice(self.lattice_inputs)
 
         self.model = tf.keras.models.Model(
@@ -150,51 +188,29 @@ class PWLLattice:
         lr=0.001,
         bs=1000,
         epochs=2000,
-        reduceLR_factor=0.5,
-        reduceLR_patience=20,
+        reduceLR_factor=0.1,
+        reduceLR_patience=10,
+        ESt_patience=20,
         verbose=1,
-        loss="KL",
+        loss="MSE",
     ):
-        assert X.shape[0] == y.shape[0]
+        # assert X.shape[0] == y.shape[0]
         # assert X.shape[1] == self.dim * 2
 
-        X = X.astype(np.float32)
-        y = y.astype(np.float32)
-
-        # for i in range(self.dim):
-        #     self.calibrators[i].input_keypoints = compute_quantiles(
-        #         X[:, i].ravel(),
-        #         num_keypoints=self.pwl_calibration_num_keypoints,
-        #     )
-        # self.calibrators[i * 2].input_keypoints = compute_quantiles(
-        #     X[:, [i * 2, i * 2 + 1]].ravel(),
-        #     num_keypoints=self.pwl_calibration_num_keypoints,
-        # )
-        # self.calibrators[i * 2 + 1].input_keypoints = compute_quantiles(
-        #     X[:, [i * 2, i * 2 + 1]].ravel(),
-        #     num_keypoints=self.pwl_calibration_num_keypoints,
-        # )
-
-        features = [X[:, i] for i in range(X.shape[1])]
-        target = y
-
-        if loss == "KL":
-            lossFunc = tf.keras.losses.KLDivergence()
-        if loss == "MAE":
-            lossFunc = tf.keras.losses.mean_absolute_error
-        if loss == "MSE":
-            lossFunc = tf.keras.losses.mean_squared_error
-        if loss == "MAPE":
-            lossFunc = tf.keras.losses.mean_absolute_percentage_error
+        Loss = {
+            "MAE": tf.keras.losses.mean_absolute_error,
+            "MSE": tf.keras.losses.mean_squared_error,
+            "MAPE": tf.keras.losses.mean_absolute_percentage_error,
+        }
 
         # self.model.compile(loss=lossFunc, optimizer="adam", metrics=["accuracy"])
-        self.model.compile(loss=lossFunc, optimizer=tf.keras.optimizers.Adamax(lr))
+        self.model.compile(loss=Loss[loss], optimizer=tf.keras.optimizers.Adamax(lr))
 
         earlyStopping = tf.keras.callbacks.EarlyStopping(
             restore_best_weights=True,
             monitor="loss",
             mode="min",
-            patience=100,
+            patience=ESt_patience,
             verbose=verbose,
         )
         mcp_save = tf.keras.callbacks.ModelCheckpoint(
@@ -203,23 +219,25 @@ class PWLLattice:
             save_best_only=True,
             monitor="loss",
             mode="min",
-            verbose=1,
+            verbose=verbose,
         )
         reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(
             monitor="loss",
             factor=reduceLR_factor,
             patience=reduceLR_patience,
             verbose=verbose,
-            min_delta=1e-10,
+            min_delta=1e-8,
             mode="min",
         )
 
+        # X = [X[:, i] for i in range(X.shape[1])]
+
         self.model.fit(
-            features,
-            target,
+            X,
+            y,
             epochs=epochs,
             batch_size=bs,
-            verbose=1,
+            verbose=verbose,
             callbacks=[earlyStopping, mcp_save, reduce_lr_loss],
         )
         self.model.save(f"{self.model_path}")
@@ -233,17 +251,18 @@ class PWLLattice:
 
     def predict(self, grid):
         # assert grid.shape[1] == self.dim
-        return self.model.predict(np.hsplit(grid, self.dim))
+        # return self.model.predict(np.hsplit(grid, self.dim))
+        return self.model.predict(grid, verbose=0)
 
     def generate_by_row(self, unique_intervals, batch_size=10000):
-        print(f"\nBegin Generating Table from Batches ({batch_size=}) ...")
+
         values = [v for v in unique_intervals.values()]
         total_combinations = np.prod([len(v) for v in values])
+        batch_num = (total_combinations // batch_size) + 1
+        print(f"\nBegin Generating Table from Batches ({batch_size=}, {batch_num=}) ...")
+
         ArrayNew = None
-        for grid_batch in tqdm(
-            self._generate_grid_batches(values, batch_size),
-            total=(total_combinations // batch_size) + 1,
-        ):
+        for grid_batch in tqdm(self._generate_grid_batches(values, batch_size), total=batch_num):
             pred_batch = self.predict(grid_batch)
             ArrayNew = self._generate_from_batches(grid_batch, pred_batch, ArrayNew)
         if ArrayNew.shape[0] < self.n_row:
@@ -260,7 +279,7 @@ class PWLLattice:
             batch = list(itertools.islice(iterator, batch_size))
             if not batch:
                 break
-            yield np.array(batch).astype(np.float32)
+            yield np.array(batch, dtype=np.float32)
 
     def _generate_from_batches(self, grid_batch, pred_batch, ArrayNew=None):
         # generate by row, one query may generate several rows

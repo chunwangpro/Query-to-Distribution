@@ -27,16 +27,16 @@ from models import *
 from query_func import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, default="wine2", help="Dataset.")
-parser.add_argument("--query-size", type=int, default=100000, help="query size")
+parser.add_argument("--dataset", type=str, default="wine3", help="Dataset.")
+parser.add_argument("--query-size", type=int, default=10000, help="query size")
 parser.add_argument("--min-conditions", type=int, default=1, help="min num of conditions")
 parser.add_argument("--max-conditions", type=int, default=2, help="max num of conditions")
-parser.add_argument("--epochs", type=int, default=3000, help="Number of epochs to train for.")
+parser.add_argument("--epochs", type=int, default=1000, help="Number of epochs to train for.")
 parser.add_argument("--bs", type=int, default=1000, help="Batch size.")
-parser.add_argument("--loss", type=str, default="MSE", help="Loss.")
 parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size.")
+parser.add_argument("--pwl-n", type=int, default=1, help="pwl layer number for each column.")
+parser.add_argument("--loss", type=str, default="MSE", help="Loss.")
 parser.add_argument("--lr", type=float, default=1e-2, help="learning rate")
-parser.add_argument("--seed", type=int, default=42, help="Random seed")
 
 try:
     args = parser.parse_args()
@@ -71,7 +71,7 @@ print("Done.\n")
 
 print("Begin Generating Queries Set ...")
 table_size = table.shape
-rng = np.random.RandomState(args.seed)
+rng = np.random.RandomState(42)
 query_set = [
     generate_random_query(table, args.min_conditions, args.max_conditions, rng)
     for _ in tqdm(range(args.query_size))
@@ -88,19 +88,21 @@ print("Done.\n")
 
 
 print("Begin Building Train set and Model ...")
-train_X, train_Y = build_train_set_1_input(query_set, unique_intervals)
+X, y = build_train_set_1_input(query_set, unique_intervals)
+X, y = build_boundary_1_input(X, y, unique_intervals)
 # PWL改成三次样条
 m = PWLLattice(
     modelPath,
     table_size,
     unique_intervals,
     pwl_keypoints=None,
+    pwl_n=args.pwl_n,
     lattice_size=args.lattice_size,
 )
 print("Done.\n")
 
 
-m.fit(train_X, train_Y, lr=args.lr, bs=args.bs, epochs=args.epochs, loss=args.loss)
+m.fit(X, y, lr=args.lr, bs=args.bs, epochs=args.epochs, loss=args.loss)
 m.load()
 
 
