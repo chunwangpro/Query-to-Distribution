@@ -32,9 +32,10 @@ def column_intervalization(query_set, table_size):
             column_interval[k] = [0]
         else:
             interval_list = sorted(list(v))
-            smallest = 2 * interval_list[0] - interval_list[1]
-            largest = 2 * interval_list[-1] - interval_list[-2]
-            column_interval[k] = [smallest] + interval_list + [largest]
+            add_small = 2 * interval_list[0] - interval_list[1]
+            add_big_1 = 2 * interval_list[-1] - interval_list[-2]
+            add_big_2 = 3 * interval_list[-1] - 2 * interval_list[-2]
+            column_interval[k] = [add_small] + interval_list + [add_big_1, add_big_2]
     return column_interval
 
 
