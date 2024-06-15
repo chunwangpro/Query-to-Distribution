@@ -29,12 +29,15 @@ from query_func import *
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, default="wine3", help="Dataset.")
 parser.add_argument("--query-size", type=int, default=10000, help="query size")
-parser.add_argument("--min-conditions", type=int, default=1, help="min num of conditions")
-parser.add_argument("--max-conditions", type=int, default=2, help="max num of conditions")
+parser.add_argument("--min-conditions", type=int, default=1, help="min num of query conditions")
+parser.add_argument("--max-conditions", type=int, default=2, help="max num of query conditions")
+parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size for each column.")
+parser.add_argument("--pwl-n", type=int, default=1, help="pwl layer number for each column.")
+
+parser.add_argument("--pwl-tanh", type=bool, default=False, help="tanh layer after pwl.")
+parser.add_argument("--boundary", type=bool, default=False, help="add boundary point to train set.")
 parser.add_argument("--epochs", type=int, default=1000, help="Number of epochs to train for.")
 parser.add_argument("--bs", type=int, default=1000, help="Batch size.")
-parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size.")
-parser.add_argument("--pwl-n", type=int, default=1, help="pwl layer number for each column.")
 parser.add_argument("--loss", type=str, default="MSE", help="Loss.")
 parser.add_argument("--lr", type=float, default=1e-2, help="learning rate")
 
@@ -89,8 +92,9 @@ print("Done.\n")
 
 print("Begin Building Train set and Model ...")
 X, y = build_train_set_1_input(query_set, unique_intervals)
-X, y = build_boundary_1_input(X, y, unique_intervals)
-# PWL改成三次样条
+if args.boundary:
+    X, y = add_boundary_1_input(X, y, unique_intervals)
+
 m = PWLLattice(
     modelPath,
     table_size,
@@ -98,6 +102,7 @@ m = PWLLattice(
     pwl_keypoints=None,
     pwl_n=args.pwl_n,
     lattice_size=args.lattice_size,
+    pwl_tanh=args.pwl_tanh,
 )
 print("Done.\n")
 

@@ -24,7 +24,7 @@ def build_train_set_1_input(query_set, unique_intervals):
     return X, y
 
 
-def build_boundary_1_input(X, y, unique_intervals):
+def add_boundary_1_input(X, y, unique_intervals):
     percent = 0.4
     # make train set unique
     train = np.hstack((X, y))
@@ -86,7 +86,7 @@ def build_train_set_2_input(query_set, unique_intervals):
     return X, y
 
 
-def build_boundary_2_input(X, y, unique_intervals):
+def add_boundary_2_input(X, y, unique_intervals):
     percent = 0.4
     # make train set unique
     train = np.hstack((X, y))
@@ -116,6 +116,7 @@ class PWLLattice:
         pwl_keypoints=None,  # also can input table unique values
         pwl_n=3,
         lattice_size=2,
+        pwl_tanh=False,
     ):
         self.name = "PWLLattice"
         self.path = path
@@ -128,6 +129,8 @@ class PWLLattice:
 
         self.pwl_n = pwl_n
         self.pwl_keypoints = unique_intervals if pwl_keypoints is None else pwl_keypoints
+        self.pwl_tanh = pwl_tanh
+
         self.lattice_size = (
             [len(v) for v in unique_intervals.values()]
             if lattice_size == 0
@@ -146,7 +149,7 @@ class PWLLattice:
                 name=f"col_{col_idx}_PWL_{PWL_idx}",
             )
 
-        def column_PWL_layer(input_layer, col_idx, pwl_n, activation=False):
+        def column_PWL_layer(input_layer, col_idx, pwl_n, activation=self.pwl_tanh):
             pwl_input = tf.keras.layers.Lambda(
                 lambda x: tf.expand_dims(x[:, col_idx], axis=-1), name=f"lambda_col_{col_idx}"
             )(input_layer)
@@ -191,10 +194,10 @@ class PWLLattice:
         lr=0.001,
         bs=1000,
         epochs=2000,
+        verbose=1,
         reduceLR_factor=0.1,
         reduceLR_patience=10,
         ESt_patience=20,
-        verbose=1,
         loss="MSE",
     ):
         # assert X.shape[0] == y.shape[0]
@@ -265,9 +268,9 @@ class PWLLattice:
         print(f"\nBegin Generating Table from Batches ({batch_size=}, {batch_num=}) ...")
 
         ArrayNew = None
-        for grid_batch in tqdm(self._generate_grid_batches(values, batch_size), total=batch_num):
+        for grid_batch in tqdm(self._yield_row_grid_batches(values, batch_size), total=batch_num):
             pred_batch = self.predict(grid_batch)
-            ArrayNew = self._generate_from_batches(grid_batch, pred_batch, ArrayNew)
+            ArrayNew = self._generate_row_batch_table(grid_batch, pred_batch, ArrayNew)
         if ArrayNew.shape[0] < self.n_row:
             print(
                 f"Generated table row length({ArrayNew.shape[0]}) is less than the original table row length({self.n_row})."
@@ -275,7 +278,7 @@ class PWLLattice:
         print("Done.\n")
         return ArrayNew
 
-    def _generate_grid_batches(self, values, batch_size):
+    def _yield_row_grid_batches(self, values, batch_size):
         # use batches to avoid memory error
         iterator = itertools.product(*values)
         while True:
@@ -284,7 +287,7 @@ class PWLLattice:
                 break
             yield np.array(batch, dtype=np.float32)
 
-    def _generate_from_batches(self, grid_batch, pred_batch, ArrayNew=None):
+    def _generate_row_batch_table(self, grid_batch, pred_batch, ArrayNew=None):
         # generate by row, one query may generate several rows
         count = 0 if ArrayNew is None else ArrayNew.shape[0]
         ops = ["<="] * self.n_column
