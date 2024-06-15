@@ -7,7 +7,7 @@ import tensorflow as tf
 import tensorflow_lattice as tfl
 from matplotlib import pyplot as plt
 from pyDOE import lhs
-from tqdm.notebook import tqdm, trange
+from tqdm import tqdm, trange
 
 import common
 import datasets
