@@ -4,13 +4,13 @@
 
 ### Single Table
 
-1. 1-input model for "<="
+- 1-input model for "<="
 
 ```bash
 python PWLLattice.py --dataset wine2 --query-size 100000 --min-conditions 1 --max-conditions 2 --epochs 2000 --bs 10000 --loss MSE
 ```
 
-2. 2-input model for "<, <=, >, >=, ="
+- 2-input model for "<, <=, >, >=, ="
 
 ```bash
 python LatticeCopula_legacy.py --dataset wine3 --query-size 1000 --num-conditions 2 --epochs 1000
