@@ -27,7 +27,7 @@ from models import *
 from query_func import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, default="wine3", help="Dataset.")
+parser.add_argument("--dataset", type=str, default="wine2", help="Dataset.")
 parser.add_argument("--query-size", type=int, default=10000, help="query size")
 parser.add_argument("--min-conditions", type=int, default=1, help="min num of query conditions")
 parser.add_argument("--max-conditions", type=int, default=2, help="max num of query conditions")
@@ -69,7 +69,7 @@ print("\nBegin Loading Data ...")
 table = np.loadtxt(f"datasets/{args.dataset}.csv", delimiter=",")
 np.savetxt(f"{resultsPath}/original_table.csv", table, delimiter=",")
 table_size = table.shape
-print(f"{args.dataset}.csv  shape: {table_size}")
+print(f"{args.dataset}.csv,   shape: {table_size}")
 print("Done.\n")
 
 
@@ -103,6 +103,7 @@ m = PWLLattice(
     lattice_size=args.lattice_size,
     pwl_tanh=args.pwl_tanh,
 )
+m.build_model()
 print("Done.\n")
 
 

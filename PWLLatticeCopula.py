@@ -24,130 +24,8 @@ from matplotlib import pyplot as plt
 from pyDOE import lhs
 from tqdm import tqdm
 
-# import common
-# import datasets
-# import estimators as estimators_lib
 from models import *
 from query_func import *
-
-# def Oracle(table, query):
-#     cols, idxs, ops, vals = query
-#     oracle_est = estimators_lib.Oracle(table)
-#     return oracle_est.Query(cols, ops, vals)
-
-
-# def cal_true_card(query, table):
-#     cols, idxs, ops, vals = query
-#     ops = np.array(ops)
-#     probs = Oracle(table, (cols, idxs, ops, vals))
-#     return probs
-
-
-# def GenerateQuery(table, min_num_filters, max_num_filters, rng, dataset):
-#     """Generate a random query."""
-#     num_filters = rng.randint(max_num_filters - 1, max_num_filters)
-#     cols, idxs, ops, vals = SampleTupleThenRandom(table, num_filters, rng, dataset)
-#     sel = cal_true_card((cols, idxs, ops, vals), table) / float(table.cardinality)
-#     return cols, idxs, ops, vals, sel
-
-
-# def SampleTupleThenRandom(table, num_filters, rng, dataset):
-#     vals = []
-#     new_table = table.data
-#     s = new_table.iloc[rng.randint(0, new_table.shape[0])]
-#     vals = s.values
-
-#     idxs = rng.choice(len(table.columns), replace=False, size=num_filters)
-#     cols = np.take(table.columns, idxs)
-#     # If dom size >= 10, okay to place a range filter.
-#     # Otherwise, low domain size columns should be queried with equality.
-#     # ops = rng.choice(['='], size=num_filters)
-#     # ops = rng.choice(['<=', '>=', '>', '<'], size=num_filters)
-#     # ops = rng.choice(['<=', '>='], size=num_filters)
-#     ops = rng.choice(["<="], size=num_filters)
-#     # ops_all_eqs = ['='] * num_filters
-#     # sensible_to_do_range = [c.DistributionSize() >= 10 for c in cols]
-#     # ops = np.where(sensible_to_do_range, ops, ops_all_eqs)
-#     # if num_filters == len(table.columns):
-#     #     return table.columns,np.arange(len(table.columns)), ops, vals
-#     vals = vals[idxs]
-#     op_a = []
-#     val_a = []
-#     for i in range(len(vals)):
-#         val_a.append([vals[i]])
-#         op_a.append([ops[i]])
-#     return cols, idxs, pd.DataFrame(op_a).values, pd.DataFrame(val_a).values
-
-
-# def dictionary_column_interval(table_size, query_set):
-#     # Traverse all queries to apply the intervalization skill for each column
-#     # deal with columns with all positive values
-#     n_column = table_size[1]
-#     column_interval = {}
-#     for i in range(n_column):
-#         column_interval[i] = set()
-#     for query in query_set:
-#         _, idxs, _, vals, _ = query
-#         for i in range(len(idxs)):
-#             column_interval[idxs[i]].add(vals[i][0])
-#     for k, v in column_interval.items():
-#         column_interval[k] = sorted(list(v))
-#         least, great = column_interval[k][0], column_interval[k][-1]
-#         column_interval[k] = sorted([0, least / 2] + column_interval[k] + [great + 1])
-#     return column_interval
-
-
-# def count_column_unique_interval(unique_intervals):
-#     # count unique query interval in each column
-#     return [len(v) for v in unique_intervals.values()]
-
-
-# def process_train_data(unique_intervals, query_set):
-#     X, Y = [], []
-#     origin = np.array([[0, v[-1]] for v in unique_intervals.values()]).ravel()
-#     for query in query_set:
-#         x = list(origin)
-#         _, idxs, ops, vals, sel = query
-#         for i in range(len(idxs)):
-#             if ops[i][0] == "<=":
-#                 x[idxs[i] * 2 + 1] = vals[i][0]
-#             elif ops[i][0] == "<":
-#                 ind = unique_intervals[idxs[i]].index(vals[i][0]) - 1
-#                 x[idxs[i] * 2 + 1] = unique_intervals[idxs[i]][ind]
-#             elif ops[i][0] == ">":
-#                 x[idxs[i] * 2] = vals[i][0]
-#             elif ops[i][0] == ">=":
-#                 ind = unique_intervals[idxs[i]].index(vals[i][0]) + 1
-#                 x[idxs[i] * 2] = unique_intervals[idxs[i]][ind]
-#             elif ops[i][0] == "=":
-#                 ind = unique_intervals[idxs[i]].index(vals[i][0]) - 1
-#                 x[idxs[i] * 2] = unique_intervals[idxs[i]][ind]
-#                 x[idxs[i] * 2 + 1] = vals[i][0]
-#         X.append(x)
-#         Y.append(sel)
-#     X = np.array(X).astype(np.float32)
-#     Y = np.array(Y).astype(np.float32).reshape(-1, 1)
-#     total = np.concatenate((X, Y), axis=1)
-#     # total = np.unique(total, axis=0)
-#     #     choose = np.random.choice(total.shape[0], size=round(total.shape[0]*train_size), replace=False)
-#     #     others = list(set(range(total.shape[0])) - set(choose))
-#     #     train, test = total[choose], total[others]
-#     #     df_train = pd.DataFrame(train, columns=[f'col_{i}' for i in range(total.shape[1])])
-#     df_train = pd.DataFrame(total, columns=[f"col_{i}" for i in range(total.shape[1])])
-#     # boundary
-#     df_train.loc[len(df_train.index)] = [0] * total.shape[1]
-#     zero = [[v[-1], 0] for v in unique_intervals.values()]
-#     df_train.loc[len(df_train.index)] = list(np.array(zero).ravel()) + [0.0]
-#     one = [[0, v[-1]] for v in unique_intervals.values()]
-#     df_train.loc[len(df_train.index)] = list(np.array(one).ravel()) + [1.0]
-
-#     new_train = np.array(df_train.sort_values(by=list(df_train.columns)[:-1]))
-#     train_X, train_Y = np.hsplit(new_train, [-1])
-
-#     #     df_test = pd.DataFrame(test, columns=[f'col_{i}' for i in range(total.shape[1])])
-#     #     new_test = np.array(df_test.sort_values(by=list(df_test.columns)[:-1]))
-#     #     test_X, test_Y = np.hsplit(new_test, [-1])
-#     return train_X, train_Y  # , test_X, test_Y
 
 
 def generate_data_new(grid, model):
@@ -198,39 +76,6 @@ def generate_data_new(grid, model):
             print(count)
     dataNew.dropna(axis=0, how="all", inplace=True)
     return dataNew
-
-
-# def execute_query(dataNew, query_set):
-#     diff = []
-#     for query in tqdm(query_set):
-#         df = dataNew
-#         _, idxs, ops, vals, sel = query
-#         for i in range(len(idxs)):
-#             op = "==" if ops[i][0] == "=" else ops[i][0]
-#             df = df.query(f"col_{idxs[i]} {op} {vals[i][0]}")
-#         card = 1 if round(sel * n_row) == 0 else round(sel * n_row)
-#         card2 = 1 if df.shape[0] == 0 else df.shape[0]
-#         diff.append(max(card / card2, card2 / card))
-#     return diff
-
-
-# def print_error(diff, args):
-#     print(
-#         f"\n\n Q-error of Lattice (query size={args.query_size}, condition={args.num_conditions}, epoches={args.epochs}):\n"
-#     )
-#     print(f"min:    {np.min(diff)}")
-#     print(f"10:     {np.percentile(diff, 10)}")
-#     print(f"20:     {np.percentile(diff, 20)}")
-#     print(f"30:     {np.percentile(diff, 30)}")
-#     print(f"40:     {np.percentile(diff, 40)}")
-#     print(f"median: {np.median(diff)}")
-#     print(f"60:     {np.percentile(diff, 60)}")
-#     print(f"70:     {np.percentile(diff, 70)}")
-#     print(f"80:     {np.percentile(diff, 80)}")
-#     print(f"90:     {np.percentile(diff, 90)}")
-#     print(f"95:     {np.percentile(diff, 95)}")
-#     print(f"max:    {np.max(diff)}")
-#     print(f"mean:   {np.mean(diff)}")
 
 
 class LatticeCDFLayer(tf.keras.Model):
@@ -428,15 +273,18 @@ class Trainer_Lattice(CopulaModel):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, default="wine3", help="Dataset.")
-parser.add_argument("--query-size", type=int, default=1000, help="query size")
+parser.add_argument("--dataset", type=str, default="wine2", help="Dataset.")
+parser.add_argument("--query-size", type=int, default=100, help="query size")
 parser.add_argument("--min-conditions", type=int, default=1, help="min num of query conditions")
 parser.add_argument("--max-conditions", type=int, default=2, help="max num of query conditions")
-# parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size for each column.")
+parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size for each column.")
 parser.add_argument("--pwl-n", type=int, default=1, help="pwl layer number for each column.")
 parser.add_argument("--pwl-tanh", type=bool, default=False, help="tanh layer after pwl.")
-parser.add_argument("--boundary", type=bool, default=False, help="add boundary point to train set.")
-parser.add_argument("--epochs", type=int, default=1000, help="Number of train epochs.")
+parser.add_argument("--boundary", type=bool, default=True, help="add boundary point to train set.")
+parser.add_argument(
+    "--unique-train", type=bool, default=False, help="make query unique in train set."
+)
+parser.add_argument("--epochs", type=int, default=2, help="Number of train epochs.")
 parser.add_argument("--bs", type=int, default=1000, help="Batch size.")
 parser.add_argument("--loss", type=str, default="MSE", help="Loss.")
 parser.add_argument("--lr", type=float, default=1e-2, help="learning rate")
@@ -466,6 +314,7 @@ modelPath = f"saved_models/{FilePath}"
 make_directory(resultsPath)
 make_directory(modelPath)
 
+
 OPS = {
     ">": np.greater,
     "<": np.less,
@@ -474,31 +323,13 @@ OPS = {
     "=": np.equal,
 }
 
-# bs = int(args.bs)
-# lr = float(args.lr)
-# train_size = float(args.train_size)
-# epochs = int(args.epochs)
-# lattice = int(args.lattice)
-# sample = int(args.sample)
-# lhs_n = int(args.lhs_n)
 
 print("\nBegin Loading Data ...")
 table = np.loadtxt(f"datasets/{args.dataset}.csv", delimiter=",")
 np.savetxt(f"{resultsPath}/original_table.csv", table, delimiter=",")
 table_size = table.shape
-print(f"{args.dataset}.csv  shape: {table_size}")
+print(f"{args.dataset}.csv,   shape: {table_size}")
 print("Done.\n")
-
-
-# table = datasets.LoadDataset(args.dataset + ".csv", args.dataset)
-
-# print("Begin Generating Queries ...")
-# rng = np.random.RandomState(args.seed)
-# query_set = [
-#     GenerateQuery(table, 2, args.num_conditions + 1, rng, args.dataset)
-#     for i in tqdm(range(args.query_size))
-# ]
-# print("Complete Generating Queries.")
 
 
 print("Begin Generating Queries Set ...")
@@ -510,37 +341,36 @@ query_set = [
 print("Done.\n")
 
 
-# print("\n\nCalculating intervalization...")
-# table_size = table.data.shape
-# n_row, n_column = table_size[0], table_size[1]
-# unique_intervals = dictionary_column_interval(table_size, query_set)
-# column_interval_number = count_column_unique_interval(unique_intervals)
-# print("\nColumn intervals", column_interval_number, np.product(column_interval_number))
-
-
 print("Begin Intervalization ...")
 unique_intervals = column_intervalization(query_set, table_size)
 column_interval_number = count_column_unique_interval(unique_intervals)
 print(f"{column_interval_number=}")
 print("Done.\n")
 
-# 这里还没改
+
 print("Begin Building Train set and Model ...")
 X, y = build_train_set_2_input(query_set, unique_intervals)
 if args.boundary:
-    X, y = add_boundary_2_input(X, y, unique_intervals)
-
-# 这里开始要改
-X, Y = process_train_data(unique_intervals, query_set)
+    X, y = add_boundary_2_input(X, y, unique_intervals, args.unique_train)
 
 
 # model = LatticeCDF(unique_intervals, pwl_keypoints=None)
-m = Trainer_Lattice(modelPath, table_size, pwl_keypoints=None)
+# m = Trainer_Lattice(modelPath, table_size, pwl_keypoints=None)
+m = PWLLatticeCopula(
+    modelPath,
+    table_size,
+    unique_intervals,
+    pwl_keypoints=None,
+    pwl_n=args.pwl_n,
+    lattice_size=args.lattice_size,
+    pwl_tanh=args.pwl_tanh,
+)
+m.build_model()
 print("Done.\n")
 
-# 下面两句已经改好了
-m.fit(X, Y, lr=args.lr, bs=args.bs, epochs=args.epochs, loss=args.loss, opt=args.opt)
-m.load()  # 要增加 load 方法
+
+m.fit(X, y, lr=args.lr, bs=args.bs, epochs=args.epochs, loss=args.loss)  # opt=args.opt
+m.load()
 
 
 # Full-Factorial net of unique intervals
