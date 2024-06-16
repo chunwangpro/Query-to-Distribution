@@ -5,7 +5,7 @@
 ## calculate_query_cardinality_numpy
 
 # Generation Phase:
-## generate_from_batches / np.concatenate
+## generate_by_row / generate_row_batch_table / np.concatenate
 
 # no Plottings
 import warnings
@@ -33,10 +33,12 @@ parser.add_argument("--min-conditions", type=int, default=1, help="min num of qu
 parser.add_argument("--max-conditions", type=int, default=2, help="max num of query conditions")
 parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size for each column.")
 parser.add_argument("--pwl-n", type=int, default=1, help="pwl layer number for each column.")
-
 parser.add_argument("--pwl-tanh", type=bool, default=False, help="tanh layer after pwl.")
 parser.add_argument("--boundary", type=bool, default=False, help="add boundary point to train set.")
-parser.add_argument("--epochs", type=int, default=1000, help="Number of epochs to train for.")
+parser.add_argument(
+    "--unique-train", type=bool, default=False, help="make query unique in train set."
+)
+parser.add_argument("--epochs", type=int, default=1000, help="Number of train epochs.")
 parser.add_argument("--bs", type=int, default=1000, help="Batch size.")
 parser.add_argument("--loss", type=str, default="MSE", help="Loss.")
 parser.add_argument("--lr", type=float, default=1e-2, help="learning rate")
@@ -53,9 +55,6 @@ def make_directory(directory):
         os.makedirs(directory)
 
 
-OPS = {">": np.greater, "<": np.less, ">=": np.greater_equal, "<=": np.less_equal, "=": np.equal}
-
-
 FilePath = (
     f"{args.dataset}_{args.query_size}_{args.min_conditions}_{args.max_conditions}_{args.loss}"
 )
@@ -64,16 +63,17 @@ modelPath = f"saved_models/{FilePath}"
 make_directory(resultsPath)
 make_directory(modelPath)
 
+OPS = {">": np.greater, "<": np.less, ">=": np.greater_equal, "<=": np.less_equal, "=": np.equal}
 
 print("\nBegin Loading Data ...")
-print(f"{args.dataset}.csv")
 table = np.loadtxt(f"datasets/{args.dataset}.csv", delimiter=",")
 np.savetxt(f"{resultsPath}/original_table.csv", table, delimiter=",")
+table_size = table.shape
+print(f"{args.dataset}.csv  shape: {table_size}")
 print("Done.\n")
 
 
 print("Begin Generating Queries Set ...")
-table_size = table.shape
 rng = np.random.RandomState(42)
 query_set = [
     generate_random_query(table, args.min_conditions, args.max_conditions, rng)
@@ -84,7 +84,6 @@ print("Done.\n")
 
 print("Begin Intervalization ...")
 unique_intervals = column_intervalization(query_set, table_size)
-unique_intervals
 column_interval_number = count_column_unique_interval(unique_intervals)
 print(f"{column_interval_number=}")
 print("Done.\n")
@@ -93,7 +92,7 @@ print("Done.\n")
 print("Begin Building Train set and Model ...")
 X, y = build_train_set_1_input(query_set, unique_intervals)
 if args.boundary:
-    X, y = add_boundary_1_input(X, y, unique_intervals)
+    X, y = add_boundary_1_input(X, y, unique_intervals, args.unique_train)
 
 m = PWLLattice(
     modelPath,
@@ -117,3 +116,5 @@ np.savetxt(f"{resultsPath}/generated_table.csv", dataNew, delimiter=",")
 
 Q_error = calculate_Q_error(dataNew, query_set, table_size)
 print_Q_error(Q_error, args, resultsPath)
+print(f"\n Original table shape : {table_size}")
+print(f"Generated table shape : {dataNew.shape}")

@@ -13,7 +13,7 @@ python PWLLattice.py --dataset wine2 --query-size 100000 --min-conditions 1 --ma
 - 2-input model for "<, <=, >, >=, ="
 
 ```bash
-python LatticeCopula_legacy.py --dataset wine3 --query-size 1000 --num-conditions 2 --epochs 1000
+python PWLLatticeCopula_legacy.py --dataset wine3 --query-size 1000 --num-conditions 2 --epochs 1000
 ```
 
 ### LPALG (PGM)

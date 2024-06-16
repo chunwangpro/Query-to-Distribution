@@ -24,11 +24,13 @@ def build_train_set_1_input(query_set, unique_intervals):
     return X, y
 
 
-def add_boundary_1_input(X, y, unique_intervals):
-    percent = 0.4
+def add_boundary_1_input(X, y, unique_intervals, unique_train=False):
+    # set percentage of boundary points
+    alpha = 0.1
     # make train set unique
     train = np.hstack((X, y))
-    train = np.unique(train, axis=0)
+    if unique_train:
+        train = np.unique(train, axis=0)
     # create boundary set
     min_x = [v[0] for v in unique_intervals.values()]
     max_x = [v[-3] for v in unique_intervals.values()]
@@ -36,12 +38,12 @@ def add_boundary_1_input(X, y, unique_intervals):
     border_y = np.array([[0], [1]])
     border = np.hstack((border_x, border_y))
     # repeat boundary to raise weight
-    k = int(train.shape[0] / border.shape[0] * percent)
+    k = int(train.shape[0] / border.shape[0] * alpha)
     repeated_border = np.tile(border, (k, 1))
     train = np.vstack((train, repeated_border))
     # shuffle and split
     np.random.shuffle(train)
-    X, y = np.hsplit(train, [X.shape[1]])
+    X, y = np.hsplit(train, [-1])
     return X, y
 
 
@@ -86,24 +88,35 @@ def build_train_set_2_input(query_set, unique_intervals):
     return X, y
 
 
-def add_boundary_2_input(X, y, unique_intervals):
-    percent = 0.4
+def add_boundary_2_input(X, y, unique_intervals, unique_train=False):
+    alpha = 0.1
     # make train set unique
     train = np.hstack((X, y))
-    train = np.unique(train, axis=0)
+    if unique_train:
+        train = np.unique(train, axis=0)
     # create boundary set
-    # min_x = [v[0] for v in unique_intervals.values()]
-    # max_x = [v[-3] for v in unique_intervals.values()]
-    # border_x = np.array([min_x, max_x])
-    # border_y = np.array([[0], [1]])
-    # border = np.hstack((border_x, border_y))
-    # repeat boundary to raise weight
-    k = int(train.shape[0] / border.shape[0] * percent)
-    repeated_border = np.tile(border, (k, 1))
-    train = np.vstack((train, repeated_border))
+    # 1. one point
+    one = np.array([[v[0], v[-1]] for v in unique_intervals.values()]).ravel()
+    one = np.append(one, 1)
+    k = int(train.shape[0] * alpha)
+    repeated_one = np.tile(one, (k, 1))
+    # 2. two zero points
+    zero_0 = np.array([[v[0]] * 2 for v in unique_intervals.values()]).ravel()
+    zero_1 = np.array([[v[-1]] * 2 for v in unique_intervals.values()]).ravel()
+    zero = np.vstack((zero_0, zero_1))
+    k = int(train.shape[0] / 2 * alpha)
+    repeated_zero = np.tile(zero, (k, 1))
+    zero_y = np.zeros((2 * k, 1))
+    repeated_zero = np.hstack((repeated_zero, zero_y))
+    # 3. other zero points
+    k = int(train.shape[0] * alpha)
+    other_zero = [[[np.random.choice(v)] * 2 for v in unique_intervals.values()] for _ in range(k)]
+    other_zero = [np.array(v).ravel() for v in other_zero]
+    other_zero = np.hstack((np.array(other_zero), np.zeros((k, 1))))
+    train = np.vstack((train, repeated_one, repeated_zero, other_zero))
     # shuffle and split
     np.random.shuffle(train)
-    X, y = np.hsplit(train, [X.shape[1]])
+    X, y = np.hsplit(train, [-1])
     return X, y
 
 
