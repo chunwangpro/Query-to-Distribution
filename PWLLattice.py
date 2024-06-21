@@ -31,6 +31,7 @@ parser.add_argument("--dataset", type=str, default="wine2", help="Dataset.")
 parser.add_argument("--query-size", type=int, default=10000, help="query size")
 parser.add_argument("--min-conditions", type=int, default=1, help="min num of query conditions")
 parser.add_argument("--max-conditions", type=int, default=2, help="max num of query conditions")
+parser.add_argument("--model", type=str, default="1-input", help="model type")
 parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size for each column.")
 parser.add_argument("--pwl-n", type=int, default=1, help="pwl layer number for each column.")
 parser.add_argument("--pwl-tanh", type=bool, default=False, help="tanh layer after pwl.")
@@ -63,22 +64,25 @@ modelPath = f"saved_models/{FilePath}"
 make_directory(resultsPath)
 make_directory(modelPath)
 
-OPS = {">": np.greater, "<": np.less, ">=": np.greater_equal, "<=": np.less_equal, "=": np.equal}
+OPS = {
+    ">": np.greater,
+    "<": np.less,
+    ">=": np.greater_equal,
+    "<=": np.less_equal,
+    "=": np.equal,
+}
 
 print("\nBegin Loading Data ...")
 table = np.loadtxt(f"datasets/{args.dataset}.csv", delimiter=",")
 np.savetxt(f"{resultsPath}/original_table.csv", table, delimiter=",")
 table_size = table.shape
-print(f"{args.dataset}.csv,   shape: {table_size}")
+print(f"{args.dataset}.csv,    shape: {table_size}")
 print("Done.\n")
 
 
 print("Begin Generating Queries Set ...")
 rng = np.random.RandomState(42)
-query_set = [
-    generate_random_query(table, args.min_conditions, args.max_conditions, rng)
-    for _ in tqdm(range(args.query_size))
-]
+query_set = [generate_random_query(table, args, rng) for _ in tqdm(range(args.query_size))]
 print("Done.\n")
 
 
@@ -90,9 +94,8 @@ print("Done.\n")
 
 
 print("Begin Building Train set and Model ...")
-X, y = build_train_set_1_input(query_set, unique_intervals)
-if args.boundary:
-    X, y = add_boundary_1_input(X, y, unique_intervals, args.unique_train)
+# X, y, m = setup_train_set_and_model(args, query_set, unique_intervals, modelPath, table_size)
+X, y = build_train_set_1_input(query_set, unique_intervals, args)
 
 m = PWLLattice(
     modelPath,

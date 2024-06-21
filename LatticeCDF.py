@@ -8,7 +8,7 @@ import tensorflow_lattice as tfl
 from tqdm import tqdm
 
 logging.disable(sys.maxsize)
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 tf.config.threading.set_intra_op_parallelism_threads(1)
 
 
@@ -23,8 +23,7 @@ def generate_query(data, num):
             if j == 0:
                 query_i = np.sort(np.random.choice(unique_vals[j], 2))
             else:
-                query_i = np.append(
-                    query_i, np.sort(np.random.choice(unique_vals[j], 2)))
+                query_i = np.append(query_i, np.sort(np.random.choice(unique_vals[j], 2)))
         query.append(query_i)
 
     return np.array(query)
@@ -33,16 +32,16 @@ def generate_query(data, num):
 def execute_query(dataNew, query_set):
     diff = []
     for query in query_set:
-        sentence = ''
+        sentence = ""
         for i in range(len(query[0])):
             if i != 0:
-                sentence += ' and '
-            sentence += f'col_{query[1][i]}'
-            if query[2][i][0] == '=':
-                sentence += '=='
+                sentence += " and "
+            sentence += f"col_{query[1][i]}"
+            if query[2][i][0] == "=":
+                sentence += "=="
             else:
                 sentence += query[2][i][0]
-            sentence += f'{query[3][i][0]}'
+            sentence += f"{query[3][i][0]}"
         sel = dataNew.query(sentence).shape[0] / dataNew.shape[0]
         sel2 = query[4]  # round(query[4] * n_row)
         if sel == 0:
@@ -56,11 +55,7 @@ def execute_query(dataNew, query_set):
     return diff
 
 
-def compute_quantiles(features,
-                      num_keypoints=10,
-                      clip_min=None,
-                      clip_max=None,
-                      missing_value=None):
+def compute_quantiles(features, num_keypoints=10, clip_min=None, clip_max=None, missing_value=None):
     # Clip min and max if desired.
     if clip_min is not None:
         features = np.maximum(features, clip_min)
@@ -72,26 +67,28 @@ def compute_quantiles(features,
     unique_features = np.unique(features)
     # Remove missing values if specified.
     if missing_value is not None:
-        unique_features = np.delete(unique_features,
-                                    np.where(unique_features == missing_value))
+        unique_features = np.delete(unique_features, np.where(unique_features == missing_value))
 
     # Compute and return quantiles over unique non-missing feature values.
     return np.unique(
-        np.quantile(unique_features,
-                    np.linspace(0., 1., num=num_keypoints),
-                    interpolation='nearest')).astype(float)
+        np.quantile(
+            unique_features, np.linspace(0.0, 1.0, num=num_keypoints), interpolation="nearest"
+        )
+    ).astype(float)
 
 
 class LatticeCDF:
-    def __init__(self,
-                 name,
-                 lattice_size,
-                 feat_mins,
-                 feat_maxs,
-                 tb_rows,
-                 pwl_calibration_input_keypoints,
-                 pwl_calibration_num_keypoints=200,
-                 l2=1e-6):
+    def __init__(
+        self,
+        name,
+        lattice_size,
+        feat_mins,
+        feat_maxs,
+        tb_rows,
+        pwl_calibration_input_keypoints,
+        pwl_calibration_num_keypoints=200,
+        l2=1e-6,
+    ):
         assert len(feat_mins) == len(feat_maxs)
         self.l2 = l2
         self.name = name
@@ -106,8 +103,7 @@ class LatticeCDF:
 
         self.model_inputs = []
         for i in range(self.dim):
-            self.model_inputs.append(
-                tf.keras.layers.Input(shape=[1], name='col_%s' % i))
+            self.model_inputs.append(tf.keras.layers.Input(shape=[1], name="col_%s" % i))
             # self.model_inputs.append(
             #     tf.keras.layers.Input(shape=[1], name='col%s_l' % i))
             # self.model_inputs.append(
@@ -128,8 +124,7 @@ class LatticeCDF:
             #     ))
             self.calibrators.append(
                 tfl.layers.PWLCalibration(
-                    input_keypoints=np.array(
-                        pwl_calibration_input_keypoints[i]),
+                    input_keypoints=np.array(pwl_calibration_input_keypoints[i]),
                     # input_keypoints=np.linspace(
                     #     feat_mins[i],
                     #     feat_maxs[i],
@@ -137,16 +132,17 @@ class LatticeCDF:
                     dtype=tf.float32,
                     output_min=0.0,
                     output_max=lattice_size - 1.0,
-                    monotonicity='increasing',
-                ))
+                    monotonicity="increasing",
+                )
+            )
 
         self.lattice = tfl.layers.Lattice(
             lattice_sizes=[lattice_size] * self.dim,  # (self.dim * 2),
-            interpolation='simplex',
-            monotonicities=['increasing'] * self.dim,  # (self.dim * 2),
+            interpolation="simplex",
+            monotonicities=["increasing"] * self.dim,  # (self.dim * 2),
             output_min=0.0,
             output_max=1.0,
-            name='lattice',
+            name="lattice",
         )
 
         # self.output1 = tfl.layers.PWLCalibration(
@@ -179,8 +175,7 @@ class LatticeCDF:
 
         self.lattice_inputs = []
         for i in range(self.dim):  # (self.dim) * 2):
-            self.lattice_inputs.append(self.calibrators[i](
-                self.model_inputs[i]))
+            self.lattice_inputs.append(self.calibrators[i](self.model_inputs[i]))
         self.model_output = self.lattice(self.lattice_inputs)
 
         self.model = tf.keras.models.Model(
@@ -189,16 +184,18 @@ class LatticeCDF:
         )
         self.model.summary()
 
-    def fit(self,
-            X,
-            y,
-            lr=0.001,
-            bs=16,
-            epochs=3000,
-            reduceLR_factor=0.5,
-            reduceLR_patience=20,
-            verbose=1,
-            loss='MSLE'):
+    def fit(
+        self,
+        X,
+        y,
+        lr=0.001,
+        bs=16,
+        epochs=3000,
+        reduceLR_factor=0.5,
+        reduceLR_patience=20,
+        verbose=1,
+        loss="MSLE",
+    ):
         assert X.shape[0] == y.shape[0]
         # assert X.shape[1] == self.dim * 2
 
@@ -223,39 +220,44 @@ class LatticeCDF:
         target = y
 
         l = tf.keras.losses.mean_squared_logarithmic_error
-        if loss == 'MAE':
+        if loss == "MAE":
             l = tf.keras.losses.mean_absolute_error
-        if loss == 'MSE':
+        if loss == "MSE":
             l = tf.keras.losses.mean_squared_error
-        if loss == 'MAPE':
+        if loss == "MAPE":
             l = tf.keras.losses.mean_absolute_percentage_error
 
         self.model.compile(loss=l, optimizer=tf.keras.optimizers.Adamax(lr))
 
         # earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=500, verbose=verbose, mode='min')
-        mcp_save = tf.keras.callbacks.ModelCheckpoint('%s.hdf5' % self.name,
-                                                      save_best_only=True,
-                                                      monitor='loss',
-                                                      mode='min',
-                                                      save_weights_only=True)
+        mcp_save = tf.keras.callbacks.ModelCheckpoint(
+            "%s.hdf5" % self.name,
+            save_best_only=True,
+            monitor="loss",
+            mode="min",
+            save_weights_only=True,
+        )
         reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(
-            monitor='loss',
+            monitor="loss",
             factor=reduceLR_factor,
             patience=reduceLR_patience,
             verbose=verbose,
             epsilon=1e-10,
-            mode='min')
+            mode="min",
+        )
 
-        self.model.fit(features,
-                       target,
-                       epochs=epochs,
-                       batch_size=bs,
-                       verbose=1,
-                       callbacks=[mcp_save, reduce_lr_loss])
-        self.model.load_weights('%s.hdf5' % self.name)
+        self.model.fit(
+            features,
+            target,
+            epochs=epochs,
+            batch_size=bs,
+            verbose=1,
+            callbacks=[mcp_save, reduce_lr_loss],
+        )
+        self.model.load_weights("%s.hdf5" % self.name)
 
     def load(self, name):
-        self.model.load_weights('%s.hdf5' % self.name)
+        self.model.load_weights("%s.hdf5" % self.name)
 
     def generate(self, grid, table_size):
 
@@ -269,22 +271,17 @@ class LatticeCDF:
             for i in range(self.dim):
                 features = []
                 for j in range(self.dim):
-                    features.append(
-                        np.array([-1e+8] * len(unique_vals[i]),
-                                 dtype=np.float32))
+                    features.append(np.array([-1e8] * len(unique_vals[i]), dtype=np.float32))
                     if i == j:
-                        features.append(
-                            np.array(unique_vals[j], dtype=np.float32))
+                        features.append(np.array(unique_vals[j], dtype=np.float32))
                     else:
                         features.append(
-                            np.array([unique_vals[i][-1]] *
-                                     len(unique_vals[i]),
-                                     dtype=np.float32))
+                            np.array([unique_vals[i][-1]] * len(unique_vals[i]), dtype=np.float32)
+                        )
                 self.sample_feat.append(features)
 
         s = np.zeros([n, self.dim])
-        pred = self.model.predict(self.sample_feat[0],
-                                  batch_size=10240).ravel() / self.tb_rows
+        pred = self.model.predict(self.sample_feat[0], batch_size=10240).ravel() / self.tb_rows
         pred /= pred[-1]
         prob = np.array([pred[0]])
         prob = np.append(prob, pred[1:] - pred[:-1])
@@ -304,18 +301,18 @@ class LatticeCDF:
             for i in tqdm(range(len(unique0))):
                 if i == 0:
                     self.sample_feat[1][0] = np.array(
-                        [-1e+8] * len(self.sample_feat[1][0]),
-                        dtype=np.float32)
+                        [-1e8] * len(self.sample_feat[1][0]), dtype=np.float32
+                    )
                 else:
                     self.sample_feat[1][0] = np.array(
-                        [unique0[i - 1]] * len(self.sample_feat[1][0]),
-                        dtype=np.float32)
-                self.sample_feat[1][1] = np.array([unique0[i]] *
-                                                  len(self.sample_feat[1][0]),
-                                                  dtype=np.float32)
-                pred = self.model.predict(
-                    self.sample_feat[1],
-                    batch_size=10240).ravel() / self.tb_rows
+                        [unique0[i - 1]] * len(self.sample_feat[1][0]), dtype=np.float32
+                    )
+                self.sample_feat[1][1] = np.array(
+                    [unique0[i]] * len(self.sample_feat[1][0]), dtype=np.float32
+                )
+                pred = (
+                    self.model.predict(self.sample_feat[1], batch_size=10240).ravel() / self.tb_rows
+                )
                 pred /= pred[-1]
                 prob = np.array([pred[0]])
                 prob = np.append(prob, pred[1:] - pred[:-1])
@@ -323,40 +320,35 @@ class LatticeCDF:
                 prob[-1] += abs(1 - prob.sum())
                 prob /= prob.sum()
                 s1 = np.append(
-                    s1,
-                    np.sort(
-                        np.random.choice(unique_vals[1],
-                                         size=counts0[i],
-                                         p=prob)))
+                    s1, np.sort(np.random.choice(unique_vals[1], size=counts0[i], p=prob))
+                )
                 # r = np.random.uniform(low=pred[0], high=pred[-1], size=counts0[i])
                 # index = np.searchsorted(pred, r, side='right') - 1
                 # s1 = np.append(s1, np.sort(unique_vals[1][index]))
             s[:, 1] = s1
-            unique1, counts1 = np.unique(s[:, [0, 1]],
-                                         axis=0,
-                                         return_counts=True)
+            unique1, counts1 = np.unique(s[:, [0, 1]], axis=0, return_counts=True)
 
             for j in range(2, self.dim):
                 sj = np.array([])
                 for i in tqdm(range(len(unique1))):
                     for k in range(1, j + 1):
-                        idx = np.searchsorted(unique_vals[k - 1],
-                                              unique1[i][k - 1])
+                        idx = np.searchsorted(unique_vals[k - 1], unique1[i][k - 1])
                         if idx == 0:
                             self.sample_feat[j][(k - 1) * 2] = np.array(
-                                [-1e+8] * len(self.sample_feat[j][0]),
-                                dtype=np.float32)
+                                [-1e8] * len(self.sample_feat[j][0]), dtype=np.float32
+                            )
                         else:
                             self.sample_feat[j][(k - 1) * 2] = np.array(
-                                [unique_vals[k - 1][idx - 1]] *
-                                len(self.sample_feat[j][0]),
-                                dtype=np.float32)
+                                [unique_vals[k - 1][idx - 1]] * len(self.sample_feat[j][0]),
+                                dtype=np.float32,
+                            )
                         self.sample_feat[j][(k - 1) * 2 + 1] = np.array(
-                            [unique1[i][k - 1]] * len(self.sample_feat[j][0]),
-                            dtype=np.float32)
-                    pred = self.model.predict(
-                        self.sample_feat[j],
-                        batch_size=10240).ravel() / self.tb_rows
+                            [unique1[i][k - 1]] * len(self.sample_feat[j][0]), dtype=np.float32
+                        )
+                    pred = (
+                        self.model.predict(self.sample_feat[j], batch_size=10240).ravel()
+                        / self.tb_rows
+                    )
                     pred /= pred[-1]
                     prob = np.array([pred[0]])
                     prob = np.append(prob, pred[1:] - pred[:-1])
@@ -364,33 +356,28 @@ class LatticeCDF:
                     prob[-1] += abs(1 - prob.sum())
                     prob /= prob.sum()
                     sj = np.append(
-                        sj,
-                        np.sort(
-                            np.random.choice(unique_vals[j],
-                                             size=counts1[i],
-                                             p=prob)))
+                        sj, np.sort(np.random.choice(unique_vals[j], size=counts1[i], p=prob))
+                    )
                     # r = np.random.uniform(low=pred[0], high=pred[-1], size=counts1[i])
                     # index = np.searchsorted(pred, r, side='right') - 1
                     # sj = np.append(sj, np.sort(unique_vals[j][index]))
                 s[:, j] = sj
                 if j < self.dim - 1:
-                    unique1, counts1 = np.unique(s[:, :j + 1],
-                                                 axis=0,
-                                                 return_counts=True)
+                    unique1, counts1 = np.unique(s[:, : j + 1], axis=0, return_counts=True)
 
         return s
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # dataset = 'cover3'
     # dataset = 'dmv3'
-    dataset = 'wine3'
+    dataset = "wine3"
     n_conditions = 1
     n_query = 10000
     seed = 1234
     np.random.seed(seed)
 
-    data = np.genfromtxt('datasets/%s.csv' % dataset, delimiter=',')
+    data = np.genfromtxt("datasets/%s.csv" % dataset, delimiter=",")
     data = data[:, :n_conditions]
 
     unique_vals = []
@@ -422,13 +409,13 @@ if __name__ == '__main__':
 
     train_col = []
     for i in range(data.shape[1]):
-        train_col.append(train_X[:, i * 2:(i + 1) * 2])
+        train_col.append(train_X[:, i * 2 : (i + 1) * 2])
 
     feat_mins = [x.min() for x in train_col]
     feat_maxs = [x.max() for x in train_col]
 
     m = LatticeCDF(dataset, 30, feat_mins, feat_maxs, data.shape[0])
-    m.fit(train_X, train_Y, bs=1024, epochs=1000, loss='MSE')
+    m.fit(train_X, train_Y, bs=1024, epochs=1000, loss="MSE")
     # m.load(dataset)
 
     unique_vals = []
@@ -449,9 +436,13 @@ if __name__ == '__main__':
         elif y_pred[i] == 0:
             Q_err.append(train_Y[i])
         else:
-            Q_err.append(
-                max(train_Y[i], y_pred[i]) / min(train_Y[i], y_pred[i]))
-    print(np.median(Q_err), np.percentile(Q_err, 90), np.percentile(Q_err, 95),
-          np.percentile(Q_err, 99), np.percentile(Q_err, 100))
+            Q_err.append(max(train_Y[i], y_pred[i]) / min(train_Y[i], y_pred[i]))
+    print(
+        np.median(Q_err),
+        np.percentile(Q_err, 90),
+        np.percentile(Q_err, 95),
+        np.percentile(Q_err, 99),
+        np.percentile(Q_err, 100),
+    )
 
     # ip.embed()

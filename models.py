@@ -11,7 +11,7 @@ from tqdm import tqdm
 from query_func import *
 
 
-def build_train_set_1_input(query_set, unique_intervals):
+def build_train_set_1_input(query_set, unique_intervals, args):
     X = []
     for query in query_set:
         x = [v[-3] for v in unique_intervals.values()]
@@ -21,6 +21,8 @@ def build_train_set_1_input(query_set, unique_intervals):
         X.append(x)
     X = np.array(X, dtype=np.float32)
     y = np.array([query[-1] for query in query_set], dtype=np.float32).reshape(-1, 1)
+    if args.boundary:
+        X, y = add_boundary_1_input(X, y, unique_intervals, args.unique_train)
     return X, y
 
 
@@ -47,7 +49,7 @@ def add_boundary_1_input(X, y, unique_intervals, unique_train=False):
     return X, y
 
 
-def build_train_set_2_input(query_set, unique_intervals):
+def build_train_set_2_input(query_set, unique_intervals, args):
 
     def process_op_lt(x, idx, val):
         x[idx * 2 + 1] = val
@@ -85,6 +87,8 @@ def build_train_set_2_input(query_set, unique_intervals):
         X.append(x)
     X = np.array(X, dtype=np.float32)
     y = np.array([query[-1] for query in query_set], dtype=np.float32).reshape(-1, 1)
+    if args.boundary:
+        X, y = add_boundary_2_input(X, y, unique_intervals, args.unique_train)
     return X, y
 
 
@@ -118,6 +122,36 @@ def add_boundary_2_input(X, y, unique_intervals, unique_train=False):
     np.random.shuffle(train)
     X, y = np.hsplit(train, [-1])
     return X, y
+
+
+def setup_train_set_and_model(args, query_set, unique_intervals, modelPath, table_size):
+    if args.model == "1-input":
+        X, y = build_train_set_1_input(query_set, unique_intervals, args)
+        m = PWLLattice(
+            modelPath,
+            table_size,
+            unique_intervals,
+            pwl_keypoints=None,
+            pwl_n=args.pwl_n,
+            lattice_size=args.lattice_size,
+            pwl_tanh=args.pwl_tanh,
+        )
+    elif args.model == "2-input":
+        X, y = build_train_set_2_input(query_set, unique_intervals, args)
+        # model = LatticeCDF(unique_intervals, pwl_keypoints=None)
+        # m = Trainer_Lattice(modelPath, table_size, pwl_keypoints=None)
+        m = PWLLatticeCopula(
+            modelPath,
+            table_size,
+            unique_intervals,
+            pwl_keypoints=None,
+            pwl_n=args.pwl_n,
+            lattice_size=args.lattice_size,
+            pwl_tanh=args.pwl_tanh,
+        )
+    else:
+        raise ValueError("Invalid model type. Please use '1-input' or '2-input'.")
+    return X, y, m
 
 
 def PWL(input_keypoints, col_idx, PWL_idx, monotonicity, suffix=""):
@@ -322,6 +356,8 @@ class PWLLattice:
                 break
             yield np.array(batch, dtype=np.float32)
 
+    # inclusion-exclusion principle is time-consuming
+    # here we query once before generate to calculate the shortfall cardinality
     def _generate_row_batch_table(self, grid_batch, pred_batch, ArrayNew=None):
         # generate by row, one query may generate several rows
         count = 0 if ArrayNew is None else ArrayNew.shape[0]

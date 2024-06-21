@@ -2,17 +2,25 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-OPS = {">": np.greater, "<": np.less, ">=": np.greater_equal, "<=": np.less_equal, "=": np.equal}
+OPS = {
+    ">": np.greater,
+    "<": np.less,
+    ">=": np.greater_equal,
+    "<=": np.less_equal,
+    "=": np.equal,
+}
 
 
-def generate_random_query(table, min_conditions, max_conditions, rng):
+def generate_random_query(table, args, rng):
     """Generate a random query."""
-    conditions = rng.randint(min_conditions, max_conditions + 1)
+    conditions = rng.randint(args.min_conditions, args.max_conditions + 1)
     idxs = rng.choice(table.shape[1], replace=False, size=conditions)
     idxs = np.sort(idxs)
     cols = table[:, idxs]
-    # ops = rng.choice(['<', '<=', '>', '>=', '='], replace=True, size=conditions)
-    ops = rng.choice(["<="], replace=True, size=conditions)
+    if args.model == "2-input":
+        ops = rng.choice(["<", "<=", ">", ">=", "="], replace=True, size=conditions)
+    elif args.model == "1-input":
+        ops = rng.choice(["<="], replace=True, size=conditions)
     vals = table[rng.randint(0, table.shape[0]), idxs]
     sel = calculate_query_cardinality(cols, ops, vals) / table.shape[0]
     return idxs, ops, vals, sel
@@ -20,12 +28,12 @@ def generate_random_query(table, min_conditions, max_conditions, rng):
 
 def column_intervalization(query_set, table_size):
     # apply the query intervalization for each column
-    # applied to <, <=, >, >=, =
     column_interval = {i: set() for i in range(table_size[1])}
     for query in query_set:
         idxs, _, vals, _ = query
         for i in range(len(idxs)):
             column_interval[idxs[i]].add(vals[i])
+    # modify the column_interval to apply to <, <=, >, >=, =
     for k, v in column_interval.items():
         if not v:
             # use [0] for empty column interval
@@ -44,21 +52,17 @@ def count_column_unique_interval(unique_intervals):
     return [len(v) for v in unique_intervals.values()]
 
 
-# inclusion-exclusion principle is time-consuming
-# here we query once before generate to calculate the shortfall cardinality
-
-
 def calculate_query_cardinality(data, ops, vals):
     """
-    Calculate the cardinality (number of rows) that satisfy a given query.
+    Use ops and vals as queries to find the number of rows in data that meet the conditions.
 
     Parameters:
-    data (np.ndarray): A 2D-array representing a subset of a table (cols).
-    ops (list): A list of operators, support operators: '>', '>=', '<', '<=', '='.
-    vals (list): A list of values.
+    data (2D-array): The subset of table columns involved in the query. Table columns not involved in the query are not included in data.
+    ops (1D-array): A list of operators, support operators: '>', '>=', '<', '<=', '='.
+    vals (1D-array): A list of values.
 
     Returns:
-    int: The number of rows that satisfy all the query conditions (cardinality).
+    int: The cardinality (number of rows) that satisfy the query.
 
     """
     if data is None:
@@ -70,36 +74,35 @@ def calculate_query_cardinality(data, ops, vals):
     return bools.sum()
 
 
-# n_column = 3
-# data = np.array([[1, 2, 3, 4, 5], [10, 20, 30, 40, 50], [10, 20, 30, 40, 50]]).T
-# ops = [">=", ">=", ">="]
-# vals = [3, 20, 20]
+# table = np.array([[1, 2, 3, 4, 5], [10, 20, 30, 40, 50], [10, 20, 30, 40, 50]]).T
+# data = table[:, [1, 2]]
+# ops = [">=", ">="]
+# vals = [20, 20]
 # print(calculate_query_cardinality(data, ops, vals))
 
 
 def calculate_Q_error(dataNew, query_set, table_size):
     print("Begin Calculating Q-error ...")
     Q_error = []
-    n_row = table_size[0]
     for query in tqdm(query_set):
         idxs, ops, vals, sel_true = query
-        cols = dataNew[:, idxs]
-        card_pred = calculate_query_cardinality(cols, ops, vals)
-        card_true = sel_true * n_row
-        if card_pred == 0:
-            card_pred = 1
-        if card_true == 0:
-            card_true = 1
-        Q_error.append(max(card_pred / card_true, card_true / card_pred))
+        card_pred = calculate_query_cardinality(dataNew[:, idxs], ops, vals)
+        card_true = int(sel_true * table_size[0])
+        if card_pred == 0 and card_true == 0:
+            Q_error.append(1)
+        elif card_pred == 0:
+            Q_error.append(card_true)
+        elif card_true == 0:
+            Q_error.append(card_pred)
+        else:
+            Q_error.append(max(card_pred / card_true, card_true / card_pred))
     print("Done.\n")
     return Q_error
 
 
-def print_Q_error(Q_error, args, savepath):
+def print_Q_error(Q_error, args, resultsPath):
     print("Summary of Q-error:")
-    print(
-        f"dataset={args.dataset}, query size={args.query_size}, condition=[{args.min_conditions}, {args.max_conditions}], loss={args.loss}):"
-    )
+    print(args)
     statistics = {
         "min": np.min(Q_error),
         "10": np.percentile(Q_error, 10),
@@ -118,5 +121,5 @@ def print_Q_error(Q_error, args, savepath):
     }
     df = pd.DataFrame.from_dict(statistics, orient="index", columns=["Q-error"])
     df.index.name = None
-    df.to_csv(f"{savepath}/Q_error.csv", index=True, header=False)
+    df.to_csv(f"{resultsPath}/Q_error.csv", index=True, header=False)
     print(df)
