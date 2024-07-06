@@ -13,14 +13,17 @@
 
 
 ## models
-- models.py                  --- models
+- models.py                  --- models(build train set, 1-input, 2-input)
 - LatticeCDF.py              --- legacy version(...)
 
 
-## PWLLattice (1-input, <, <=)
-- PWLLattice.py              --- PWL-Lattice 网络(速度更快的numpy版本)
-- PWLLattice_legacy.py       --- PWL-Lattice 网络(较早的common.CSVTable版本)
-- PWLLattice_test.ipynb      --- PWL-Lattice 网络的测试文件(用%reload加载要测试的文件)
+## SingleTable(1-input, 2-input)
+- SingleTable.py                 --- 单表生成网络(速度更快的numpy版本)(包含1-input和2-input)
+- SingleTable_test.ipynb         --- 单表生成网络的测试文件(用%reload加载要测试的文件)
+- SingleTable_1_input.py         --- 1-input 网络(速度更快的numpy版本)
+- SingleTable_1_input_legacy.py  --- 1-input 网络(较早的common.CSVTable版本)
+- SingleTable_2_input_legacy.py  --- 2-input 网络(较早的common.CSVTable版本)
+
 
 
 ## Plotting
