@@ -14,16 +14,17 @@ OPS = {
 def generate_random_query(table, args, rng):
     """Generate a random query."""
     conditions = rng.randint(args.min_conditions, args.max_conditions + 1)
+    if args.model == "2-input":
+        # ops = rng.choice(["<", "<=", ">", ">=", "="], replace=True, size=conditions)
+        ops = rng.choice(["="], replace=True, size=conditions)
+    elif args.model == "1-input":
+        ops = rng.choice(["<="], replace=True, size=conditions)
     idxs = rng.choice(table.shape[1], replace=False, size=conditions)
     idxs = np.sort(idxs)
     cols = table[:, idxs]
-    if args.model == "2-input":
-        ops = rng.choice(["<", "<=", ">", ">=", "="], replace=True, size=conditions)
-    elif args.model == "1-input":
-        ops = rng.choice(["<="], replace=True, size=conditions)
     vals = table[rng.randint(0, table.shape[0]), idxs]
-    sel = calculate_query_cardinality(cols, ops, vals) / table.shape[0]
-    return idxs, ops, vals, sel
+    card = calculate_query_cardinality(cols, ops, vals)
+    return idxs, ops, vals, card
 
 
 def column_intervalization(query_set, table_size):
@@ -81,13 +82,12 @@ def calculate_query_cardinality(data, ops, vals):
 # print(calculate_query_cardinality(data, ops, vals))
 
 
-def calculate_Q_error(dataNew, query_set, table_size):
+def calculate_Q_error(dataNew, query_set):
     print("Begin Calculating Q-error ...")
     Q_error = []
     for query in tqdm(query_set):
-        idxs, ops, vals, sel_true = query
+        idxs, ops, vals, card_true = query
         card_pred = calculate_query_cardinality(dataNew[:, idxs], ops, vals)
-        card_true = int(sel_true * table_size[0])
         if card_pred == 0 and card_true == 0:
             Q_error.append(1)
         elif card_pred == 0:
