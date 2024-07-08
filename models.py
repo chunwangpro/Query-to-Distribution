@@ -27,10 +27,13 @@ def build_train_set_1_input(query_set, unique_intervals, args, table_size):
     # make train set unique
     if args.unique_train:
         train = np.unique(train, axis=0)
+
     # add boundary
     if args.boundary:
         train = add_boundary_1_input(train, unique_intervals, args.boundary)
 
+    # shuffle and split
+    np.random.shuffle(train)
     X, y = np.hsplit(train, [-1])
     return X, y
 
@@ -48,8 +51,6 @@ def add_boundary_1_input(train, unique_intervals, alpha=0.1):
     repeated_border = np.tile(border, (k, 1))
     train = np.vstack((train, repeated_border))
 
-    # shuffle and split
-    np.random.shuffle(train)
     return train
 
 
@@ -98,10 +99,13 @@ def build_train_set_2_input(query_set, unique_intervals, args, table_size):
     # make train set unique
     if args.unique_train:
         train = np.unique(train, axis=0)
+
     # add boundary
     if args.boundary:
         train = add_boundary_2_input(train, unique_intervals, args.boundary)
 
+    # shuffle and split
+    np.random.shuffle(train)
     X, y = np.hsplit(train, [-1])
     return X, y
 
@@ -132,16 +136,22 @@ def add_boundary_2_input(train, unique_intervals, alpha=0.1):
     other_zero = [np.array(v).ravel() for v in other_zero]
     other_zero = np.hstack((np.array(other_zero), np.zeros((k, 1))))
 
-    # shuffle and split
     train = np.vstack((train, repeated_one, repeated_zero, other_zero))
-    np.random.shuffle(train)
     return train
 
 
 def setup_train_set_and_model(args, query_set, unique_intervals, modelPath, table_size):
+    """
+    Setup the training set and model based on the model type.
+    X: Train X, query intervals. e.g. [a,b) for each column in 2-input model; (-inf, a] for each column in 1-input model.
+    y: Train y, cardinality.
+    m: Model.
+    values: Unique intervals of each column, it will be used to generate grid intervals in table generation phase after model is well-trained. e.g. [a,b) for each column in 2-input model; (-inf, a] for each column in 1-input model.
+    """
     if args.model == "1-input":
         X, y = build_train_set_1_input(query_set, unique_intervals, args, table_size)
         m = PWLLattice(
+            args,
             modelPath,
             table_size,
             unique_intervals,
@@ -157,6 +167,7 @@ def setup_train_set_and_model(args, query_set, unique_intervals, modelPath, tabl
         # model = LatticeCDF(unique_intervals, pwl_keypoints=None)
         # m = Trainer_Lattice(modelPath, table_size, pwl_keypoints=None)
         m = PWLLatticeCopula(
+            args,
             modelPath,
             table_size,
             unique_intervals,
@@ -191,7 +202,7 @@ def PWL(input_keypoints, col_idx, PWL_idx, monotonicity, suffix=""):
 def column_PWL_layer(input_layer, pwl_keypoints, dim_idx, pwl_n, input_type, activation=False):
     # One column with Multiple PWL layers and optional activation
     layer_input = tf.keras.layers.Lambda(
-        lambda x: tf.expand_dims(x[:, dim_idx], axis=-1), name=f"lambda_col_{dim_idx}"
+        lambda x: tf.expand_dims(x[:, dim_idx], axis=-1), name=f"lambda_dim_{dim_idx}"
     )(input_layer)
     x = layer_input
 
@@ -223,10 +234,13 @@ def column_PWL_layer(input_layer, pwl_keypoints, dim_idx, pwl_n, input_type, act
 def Lattice(lattice_size, monotonicities, col_idx, interpolation="simplex"):
     return tfl.layers.Lattice(
         lattice_sizes=lattice_size,
+        units=1,  # output dimension
         interpolation=interpolation,  # "simplex", "hypercube"
-        monotonicities=monotonicities,
+        monotonicities=monotonicities,  # "increasing", "none"
         output_min=0.0,
         output_max=1.0,
+        num_projection_iterations=10,
+        monotonic_at_every_step=True,
         name=f"lattice_col_{col_idx}",
     )
 
@@ -235,6 +249,7 @@ class PWLLattice:
     # PWL + Lattice: 1-input Model
     def __init__(
         self,
+        args,
         path,
         table_size,
         unique_intervals,
@@ -244,6 +259,7 @@ class PWLLattice:
         pwl_tanh=False,
     ):
         self.name = "PWLLattice"
+        self.args = args
         self.path = path
 
         self.n_row, self.n_column = table_size
@@ -350,8 +366,8 @@ class PWLLattice:
         )
         self.model.save(f"{self.path}/{self.name}_model")
 
-    def predict(self, grid, verbose=0):
-        return self.model.predict(grid, verbose)
+    def predict(self, x, verbose=0):
+        return self.model.predict(x, verbose=verbose)
 
     def load(self, modelPath=None, summary=False):
         Path = modelPath if modelPath else self.path
@@ -360,24 +376,51 @@ class PWLLattice:
         if summary:
             print(self.model.summary())
 
-    def generate_table_by_row(self, values, batch_size=10000):
+    def generate_table_by_row(self, values, batch_size=10000, test_table=None):
         total_combinations = np.prod([len(v) for v in values])
         batch_number = (total_combinations // batch_size) + 1
         print(f"\nBegin Generating Table by Row Batches ({batch_number=}, {batch_size=}) ...")
 
-        # Table_Generated = None
-        Table_Generated = np.empty((0, self.dim), dtype=np.float32)
+        Table_Generated = np.empty((0, self.n_column), dtype=np.float32)
         for row_batch in tqdm(self._yield_row_batch(values, batch_size), total=batch_number):
-            pred_batch = self.predict(row_batch)
+            # pred_batch = self.model.predict(row_batch, verbose=0)
+            # # Case 1: change 0.8 to 0, 1.8 to 1
+            # pred_batch = (pred_batch * self.n_row).astype(int)
+
+            # only for test: begin test
+            # print(f"row_batch: {row_batch}")
+            table = test_table
+
+            if self.args.model == "1-input":
+                ops = ["<="] * self.n_column
+                new_table = table
+            elif self.args.model == "2-input":
+                ops = [">=", "<"] * self.n_column
+                rows, cols = table.shape
+                new_table = np.zeros((rows, 2 * cols))
+                for i in range(cols):
+                    new_table[:, 2 * i] = table[:, i]
+                    new_table[:, 2 * i + 1] = table[:, i]
+            pred_batch = np.array(
+                [calculate_query_cardinality(new_table, ops, row) for row in row_batch]
+            ).reshape(-1, 1)
+            ##### test end
+
             Table_Generated = self._generate_subtable_by_row_batch(
                 row_batch, pred_batch, Table_Generated
             )
-        if Table_Generated.shape[0] < self.n_row:
-            print(
-                f"Generated table row length({Table_Generated.shape[0]}) is less than the original table row length({self.n_row})."
-            )
-        print("Done.\n")
-        return Table_Generated
+            if Table_Generated.shape[0] > self.n_row:
+                print(f"Reached table max row length({self.n_row}), stop generation.")
+                break
+        else:
+            if Table_Generated.shape[0] < self.n_row:
+                print(
+                    f"Generated table row length({Table_Generated.shape[0]}) is less than the original table row length({self.n_row})."
+                )
+            else:
+                print("Done.\n")
+            return Table_Generated
+        return Table_Generated[: self.n_row, :]
 
     def _yield_row_batch(self, values, batch_size):
         # yield batches to avoid large memory usage
@@ -392,11 +435,6 @@ class PWLLattice:
         """
         Using inclusion-exclusion principle is time-consuming. Here we query once before generate to calculate the shortfall cardinality. One query may generate several rows.
         """
-        # count = 0 if Table_Generated is None else Table_Generated.shape[0]
-
-        # Case 1: change 0.8 to 0, 1.8 to 1
-        pred_batch = (pred_batch * self.n_row).astype(int)
-
         ops = ["<="] * self.n_column
         for i in range(row_batch.shape[0]):
             vals = row_batch[i]
@@ -405,25 +443,9 @@ class PWLLattice:
             if card < 1:
                 continue
 
-            # subtable = np.repeat(vals, card).reshape(self.dim, card).T
             subtable = np.tile(vals, (card, 1))
-
             Table_Generated = np.concatenate((Table_Generated, subtable), axis=0)
-            # if Table_Generated is None:
-            #     Table_Generated = subtable
-            # else:
-            #     Table_Generated = np.concatenate((Table_Generated, subtable), axis=0)
-
-            # count += card
-            # if count > self.n_row:
-            if Table_Generated.shape[0] > self.n_row:
-                print(
-                    f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {vals}, stop generation."
-                )
-                break
-        else:
-            return Table_Generated
-        return Table_Generated[: self.n_row, :]
+        return Table_Generated
 
     def generate_table_by_col():
         pass
@@ -433,6 +455,7 @@ class PWLLatticeCopula(PWLLattice):
     # PWL + Lattice + Copula: 2-input Model
     def __init__(
         self,
+        args,
         path,
         table_size,
         unique_intervals,
@@ -442,6 +465,7 @@ class PWLLatticeCopula(PWLLattice):
         pwl_tanh=False,
     ):
         super().__init__(
+            args,
             path,
             table_size,
             unique_intervals,
@@ -495,11 +519,6 @@ class PWLLatticeCopula(PWLLattice):
         """
         Using inclusion-exclusion principle is time-consuming. Here we query once before generate to calculate the shortfall cardinality. One query may generate several rows.
         """
-        count = 0 if Table_Generated is None else Table_Generated.shape[0]
-
-        # Case 1: change 0.8 to 0, 1.8 to 1
-        pred_batch = (pred_batch * self.n_row).astype(int)
-
         valid_indices = np.where(pred_batch[:, 0] >= 1)[0]
         for i in valid_indices:
             card = pred_batch[i, 0]
@@ -507,22 +526,87 @@ class PWLLatticeCopula(PWLLattice):
 
             # [::2] use the left interval of each column pair
             subtable = np.tile(vals[::2], (card, 1))
-            # subtable = np.repeat(vals[::2], card).reshape(self.n_column, card).T
+            Table_Generated = np.concatenate((Table_Generated, subtable), axis=0)
+            # if Table_Generated is None:
+            #     Table_Generated = subtable
+            # else:
+            #     Table_Generated = np.concatenate((Table_Generated, subtable), axis=0)
 
-            if Table_Generated is None:
-                Table_Generated = subtable
-            else:
-                Table_Generated = np.concatenate((Table_Generated, subtable), axis=0)
+        #     count += card
+        #     if count > self.n_row:
+        #         print(
+        #             f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {vals}, stop generation."
+        #         )
+        #         break
+        # else:
+        #     return Table_Generated
+        # return Table_Generated[: self.n_row, :]
+        return Table_Generated
 
-            count += card
-            if count > self.n_row:
-                print(
-                    f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {vals}, stop generation."
+    def generate_table_by_col(self, unique_intervals, values, column_one_point, batch_size=10000):
+        print(f"\nBegin Generating Table by Column ...")
+
+        Table_Generated = np.empty(
+            (0, 1), dtype=np.float32
+        )  ## 这里需要改，看看后续predict和添加表之后怎么改
+
+        for col_idx in self.column:
+            new_values = self._process_grid_values(
+                Table_Generated, unique_intervals, values, col_idx
+            )
+
+            total_combinations = np.prod([len(v) for v in new_values])
+            batch_number = (total_combinations // batch_size) + 1
+            print(
+                f"\nGenerating Column {col_idx}/{self.column} by Batches ({batch_number=}, {batch_size=}) ..."
+            )
+
+            for batch in tqdm(self._yield_col_batch(new_values, batch_size), total=batch_number):
+                col_batch = self._assemble_batch_with_back_column(batch, col_idx, column_one_point)
+                pred_batch = self.model.predict(col_batch, verbose=0)
+                # Case 1: change 0.8 to 0, 1.8 to 1
+                pred_batch = (pred_batch * self.n_row).astype(int)
+                Table_Generated = self._generate_subtable_by_col_batch(
+                    col_batch, pred_batch, Table_Generated
                 )
-                break
-        else:
-            return Table_Generated
-        return Table_Generated[: self.n_row, :]
+            ###### break 条件要重新设计
+        return Table_Generated
 
-    def generate_table_by_col():
+    def _yield_col_batch(self, values, batch_size):
+        # 只适用于 2-input
+        # yield batches to avoid large memory usage
+        iterator = itertools.product(*values)
+        while True:
+            batch = list(itertools.islice(iterator, batch_size))
+            if not batch:
+                break
+            np_batch = np.array([np.concatenate(b) for b in batch], dtype=np.float32)
+            yield np_batch.reshape(len(batch), -1)
+
+    def _process_grid_values(self, Table_Generated, unique_intervals, values, col_idx):
+        # 只适用于 2-input
+        if col_idx == 0:
+            new_values = [values[0]]
+        else:
+            Table_Generated = np.unique(Table_Generated, axis=0)
+            Table_G_size = Table_Generated.shape
+            front_column = np.zeros(
+                (Table_G_size[0], Table_G_size[1] * 2), dtype=Table_Generated.dtype
+            )
+            front_column[:, 0::2] = Table_Generated
+
+            for j in range(Table_G_size[1]):
+                interval = np.array(unique_intervals[j])
+                idx = np.searchsorted(interval, Table_Generated[:, j])
+                front_column[:, j * 2 + 1] = interval[idx + 1]
+            new_values = [front_column, values[col_idx]]
+        return new_values
+
+    def _assemble_batch_with_back_column(self, batch, col_idx, column_one_point):
+        back_column = column_one_point[2 * col_idx + 2 :]
+        repeated_back_columns = np.tile(back_column, (len(batch), 1))
+        col_batch = np.hstack(batch, repeated_back_columns)
+        return col_batch
+
+    def _generate_subtable_by_col_batch(self, col_batch, pred_batch, Table_Generated):
         pass

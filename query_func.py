@@ -82,12 +82,25 @@ def calculate_query_cardinality(data, ops, vals):
 # print(calculate_query_cardinality(data, ops, vals))
 
 
-def calculate_Q_error(dataNew, query_set):
+def calculate_Q_error(dataNew, query_set, table_size):
     print("Begin Calculating Q-error ...")
     Q_error = []
     for query in tqdm(query_set):
         idxs, ops, vals, card_true = query
         card_pred = calculate_query_cardinality(dataNew[:, idxs], ops, vals)
+        # test
+        print(f"True: {card_true}, Pred: {card_pred}")
+        # card_true /= table_size[0]
+        # card_pred /= dataNew.shape[0]
+
+        # if card_pred == 0:
+        #     card_pred = 1
+        # if card_true == 0:
+        #     card_true = 1
+
+        # Q_error.append(max(card_pred / card_true, card_true / card_pred))
+        # # end test
+
         if card_pred == 0 and card_true == 0:
             Q_error.append(1)
         elif card_pred == 0:

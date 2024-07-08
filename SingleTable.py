@@ -225,7 +225,7 @@ parser.add_argument("--dataset", type=str, default="wine3", help="Dataset.")
 parser.add_argument("--query-size", type=int, default=10000, help="query size")
 parser.add_argument("--min-conditions", type=int, default=1, help="min num of query conditions")
 parser.add_argument("--max-conditions", type=int, default=3, help="max num of query conditions")
-parser.add_argument("--boundary", type=bool, default=True, help="add boundary point to train set.")
+parser.add_argument("--boundary", type=bool, default=False, help="add boundary point to train set.")
 parser.add_argument(
     "--unique-train", type=bool, default=False, help="make query unique in train set."
 )
@@ -271,11 +271,8 @@ OPS = {
 
 print("\nBegin Loading Data ...")
 table = np.loadtxt(f"datasets/{args.dataset}.csv", delimiter=",")
-try:
-    table_size = table.shape[0], table.shape[1]
-except:
-    table = table.reshape(-1, 1)  # change 1D array to 2D table
-    table_size = table.shape[0], table.shape[1]
+table = table.reshape(len(table), -1)
+table_size = table.shape[0], table.shape[1]
 np.savetxt(f"{resultsPath}/original_table.csv", table, delimiter=",")
 print(f"{args.dataset}.csv,    shape: {table_size}")
 print("Done.\n")
@@ -334,7 +331,7 @@ m.load()
 # grid = np.concatenate([grid_a, greatest], axis=0)
 
 
-dataNew = m.generate_by_row(values, batch_size=10000)
+dataNew = m.generate_table_by_row(values, batch_size=10000)
 np.savetxt(f"{resultsPath}/generated_table.csv", dataNew, delimiter=",")
 
 
