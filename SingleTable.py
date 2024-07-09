@@ -13,21 +13,15 @@ import warnings
 
 warnings.filterwarnings("ignore")
 import argparse
-import itertools
 import os
-import sys
 
 import numpy as np
-import pandas as pd
-import tensorflow as tf
-import tensorflow_lattice as tfl
-from matplotlib import pyplot as plt
-
-# from pyDOE import lhs
 from tqdm import tqdm
 
 from models import *
 from query_func import *
+
+np.random.seed(42)
 
 # class LatticeCDFLayer(tf.keras.Model):
 #     def __init__(self, dim, lattice_size=2):
@@ -225,14 +219,21 @@ parser.add_argument("--dataset", type=str, default="wine3", help="Dataset.")
 parser.add_argument("--query-size", type=int, default=10000, help="query size")
 parser.add_argument("--min-conditions", type=int, default=1, help="min num of query conditions")
 parser.add_argument("--max-conditions", type=int, default=3, help="max num of query conditions")
-parser.add_argument("--boundary", type=bool, default=False, help="add boundary point to train set.")
-parser.add_argument(
-    "--unique-train", type=bool, default=False, help="make query unique in train set."
-)
-parser.add_argument("--pwl-n", type=int, default=1, help="pwl layer number for each column.")
-parser.add_argument("--pwl-tanh", type=bool, default=False, help="tanh layer after pwl.")
 parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size for each column.")
-parser.add_argument("--epochs", type=int, default=1000, help="Number of train epochs.")
+parser.add_argument(
+    "--last-lattice-size", type=int, default=2, help="Lattice size for Joint CDF model."
+)
+parser.add_argument(
+    "--boundary", type=bool, default=False, help="whether add boundary point to train set."
+)
+parser.add_argument(
+    "--unique-train", type=bool, default=False, help="whether make train set unique."
+)
+parser.add_argument("--pwl-n", type=int, default=1, help="Number of PWL layer for each column.")
+parser.add_argument(
+    "--pwl-tanh", type=bool, default=False, help="whether add tanh activation layer after pwl."
+)
+parser.add_argument("--epochs", type=int, default=2000, help="Number of train epochs.")
 parser.add_argument("--bs", type=int, default=1000, help="Batch size.")
 parser.add_argument("--loss", type=str, default="MSE", help="Loss.")
 parser.add_argument("--opt", type=str, default="adamax", help="Optimizer.")
@@ -331,11 +332,11 @@ m.load()
 # grid = np.concatenate([grid_a, greatest], axis=0)
 
 
-dataNew = m.generate_table_by_row(values, batch_size=10000)
-np.savetxt(f"{resultsPath}/generated_table.csv", dataNew, delimiter=",")
+Table_Generated = m.generate_table_by_row(values, batch_size=10000)
+np.savetxt(f"{resultsPath}/generated_table.csv", Table_Generated, delimiter=",")
 
 
-Q_error = calculate_Q_error(dataNew, query_set)
+Q_error = calculate_Q_error(Table_Generated, query_set)
 print_Q_error(Q_error, args, resultsPath)
 print(f"\n Original table shape : {table_size}")
-print(f"Generated table shape : {dataNew.shape}")
+print(f"Generated table shape : {Table_Generated.shape}")

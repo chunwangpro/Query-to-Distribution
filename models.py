@@ -1,7 +1,5 @@
-import warnings
-
-warnings.filterwarnings("ignore")
 import itertools
+import warnings
 
 import numpy as np
 import tensorflow as tf
@@ -9,6 +7,14 @@ import tensorflow_lattice as tfl
 from tqdm import tqdm
 
 from query_func import *
+
+np.random.seed(42)
+warnings.filterwarnings("ignore")
+
+
+class ModelTypeError(ValueError):
+    def __init__(self, message="Invalid model type. Please use '1-input' or '2-input'."):
+        super().__init__(message)
 
 
 def build_train_set_1_input(query_set, unique_intervals, args, table_size):
@@ -156,9 +162,6 @@ def setup_train_set_and_model(args, query_set, unique_intervals, modelPath, tabl
             table_size,
             unique_intervals,
             pwl_keypoints=None,
-            pwl_n=args.pwl_n,
-            lattice_size=args.lattice_size,
-            pwl_tanh=args.pwl_tanh,
         )
         values = [v for v in unique_intervals.values()]
 
@@ -172,13 +175,10 @@ def setup_train_set_and_model(args, query_set, unique_intervals, modelPath, tabl
             table_size,
             unique_intervals,
             pwl_keypoints=None,
-            pwl_n=args.pwl_n,
-            lattice_size=args.lattice_size,
-            pwl_tanh=args.pwl_tanh,
         )
         values = [[(v[i], v[i + 1]) for i in range(len(v) - 1)] for v in unique_intervals.values()]
     else:
-        raise ValueError("Invalid model type. Please use '1-input' or '2-input'.")
+        raise ModelTypeError()
     return X, y, m, values
 
 
@@ -190,43 +190,47 @@ def PWL(input_keypoints, col_idx, PWL_idx, monotonicity, suffix=""):
         dtype=tf.float32,
         output_min=0.0,
         output_max=1.0,
-        monotonicity=monotonicity,  # "increasing" or "decreasing" or "none"
-        kernel_initializer="equal_heights",  # "equal_heights" or "equal_slopes"
-        kernel_regularizer=None,  # ("laplacian", 0.5, 0.5),  # ("laplacian", l1, l2)
+        monotonicity=monotonicity,
+        # "increasing" or "decreasing" or "none"
+        kernel_initializer="equal_heights",
+        # "equal_heights" or "equal_slopes"
+        kernel_regularizer=None,
+        # ("laplacian", 0.5, 0.5),  # ("laplacian", l1, l2)
         num_projection_iterations=8,
-        input_keypoints_type="fixed",  # "fixed" or "learned_interior"
+        input_keypoints_type="fixed",
+        # "fixed" or "learned_interior"
         name=f"col_{col_idx}{suffix}_PWL_{PWL_idx}",
     )
 
 
-def column_PWL_layer(input_layer, pwl_keypoints, dim_idx, pwl_n, input_type, activation=False):
-    # One column with Multiple PWL layers and optional activation
+def column_PWL(input_layer, pwl_keypoints, dim_idx, pwl_n, model_type, activation=False):
+    # Assemble multiple PWL layers and optional activation layers for single column.
     layer_input = tf.keras.layers.Lambda(
         lambda x: tf.expand_dims(x[:, dim_idx], axis=-1), name=f"lambda_dim_{dim_idx}"
     )(input_layer)
     x = layer_input
 
-    if input_type == "1-input":
+    if model_type == "1-input":
         monotonicity = "increasing"
         suffix = ""
         col_idx = dim_idx
-    elif input_type == "2-input":
+    elif model_type == "2-input":
         monotonicity = "increasing" if dim_idx % 2 else "decreasing"
         suffix = "_sup" if dim_idx % 2 else "_inf"
         col_idx = dim_idx // 2
     else:
-        raise ValueError("Invalid input_type. Must be '1-input' or '2-input'.")
+        raise ModelTypeError()
 
     for j in range(pwl_n):
         if j == 0:
             # first PWL layer
             keypoints = pwl_keypoints[col_idx]
         else:
-            # other PWL layers
+            # other PWL layers if pwl_n > 1
             keypoints = np.linspace(0, 1, num=len(pwl_keypoints[col_idx]))
         x = PWL(keypoints, col_idx, j, monotonicity, suffix)(x)
         if activation and j < pwl_n - 1:
-            # add activation after PWL layer except the last PWL layer
+            # add activation after PWL layer except the last PWL layer, if activation is True
             x = tf.keras.layers.Activation("tanh", name=f"col_{col_idx}{suffix}_tanh_{j}")(x)
     return x
 
@@ -235,8 +239,10 @@ def Lattice(lattice_size, monotonicities, col_idx, interpolation="simplex"):
     return tfl.layers.Lattice(
         lattice_sizes=lattice_size,
         units=1,  # output dimension
-        interpolation=interpolation,  # "simplex", "hypercube"
-        monotonicities=monotonicities,  # "increasing", "none"
+        interpolation=interpolation,
+        # "simplex", "hypercube"
+        monotonicities=monotonicities,
+        # "increasing", "none"
         output_min=0.0,
         output_max=1.0,
         num_projection_iterations=10,
@@ -254,9 +260,6 @@ class PWLLattice:
         table_size,
         unique_intervals,
         pwl_keypoints=None,
-        pwl_n=3,
-        lattice_size=2,
-        pwl_tanh=False,
     ):
         self.name = "PWLLattice"
         self.args = args
@@ -265,42 +268,43 @@ class PWLLattice:
         self.n_row, self.n_column = table_size
         self.dim = self.n_column
         self.unique_intervals = unique_intervals
+        self.col_lattice_size = 2 if args.lattice_size == 0 else args.lattice_size
 
-        self.pwl_keypoints = (
-            unique_intervals if pwl_keypoints is None else pwl_keypoints
-        )  # also can be unique values of each column distribution
-        self.pwl_n = pwl_n
-        self.pwl_tanh = pwl_tanh
-
-        # self.last_lattice_size is used in the last layer of the model, if it is a lattice layer.
-        self.last_lattice_size = (
-            [len(v) for v in unique_intervals.values()]
-            if lattice_size == 0
-            else [lattice_size] * self.n_column
-        )
+        self.pwl_keypoints = unique_intervals if pwl_keypoints is None else pwl_keypoints
+        # also can be unique values of each column distribution
+        self.pwl_n = args.pwl_n
+        self.pwl_tanh = args.pwl_tanh
 
     def show_all_attributes(self):
         for key, value in self.__dict__.items():
             print(f"{key}: {value}")
 
-    def build_model(self):
+    def build_model(self, input_model):
         self.model_inputs = tf.keras.layers.Input(shape=[self.dim], name="input_layer")
 
-        self.column_PWL = [
-            column_PWL_layer(
-                self.model_inputs, self.pwl_keypoints, i, self.pwl_n, "1-input", self.pwl_tanh
+        self.All_Column_PWLs = [
+            column_PWL(
+                self.model_inputs, self.pwl_keypoints, i, self.pwl_n, self.args.model, self.pwl_tanh
             )
             for i in range(self.dim)
         ]
 
-        # here use lattice layer as the last layer to learn the CDF, can be replaced by other layers, e.g., AutoRegressive Model
-        self.JointCDFModel = Lattice(
-            self.last_lattice_size,
-            monotonicities=["increasing"] * self.n_column,
-            col_idx="Joint-CDF",
-        )
+        if self.args.model == "1-input":
+            self.column_cdf = self.All_Column_PWLs
+        elif self.args.model == "2-input":
+            self.column_cdf = [
+                Lattice(
+                    lattice_size=[self.col_lattice_size] * 2,
+                    monotonicities=["increasing"] * 2,
+                    col_idx=i // 2,
+                )([self.All_Column_PWLs[i], self.All_Column_PWLs[i + 1]])
+                for i in range(0, self.dim, 2)
+            ]  # 2-input lattice layers for each column
+        else:
+            raise ModelTypeError()
 
-        self.model_output = self.JointCDFModel(self.column_PWL)
+        self.Joint_CDF = input_model
+        self.model_output = self.Joint_CDF(self.column_cdf)
 
         self.model = tf.keras.models.Model(
             inputs=self.model_inputs,
@@ -383,28 +387,26 @@ class PWLLattice:
 
         Table_Generated = np.empty((0, self.n_column), dtype=np.float32)
         for row_batch in tqdm(self._yield_row_batch(values, batch_size), total=batch_number):
-            # pred_batch = self.model.predict(row_batch, verbose=0)
-            # # Case 1: change 0.8 to 0, 1.8 to 1
-            # pred_batch = (pred_batch * self.n_row).astype(int)
+            pred_batch = self.model.predict(row_batch, verbose=0)
+            # Case 1: change 0.8 to 0, 1.8 to 1
+            pred_batch = (pred_batch * self.n_row).astype(int)
 
-            # only for test: begin test
-            # print(f"row_batch: {row_batch}")
-            table = test_table
-
-            if self.args.model == "1-input":
-                ops = ["<="] * self.n_column
-                new_table = table
-            elif self.args.model == "2-input":
-                ops = [">=", "<"] * self.n_column
-                rows, cols = table.shape
-                new_table = np.zeros((rows, 2 * cols))
-                for i in range(cols):
-                    new_table[:, 2 * i] = table[:, i]
-                    new_table[:, 2 * i + 1] = table[:, i]
-            pred_batch = np.array(
-                [calculate_query_cardinality(new_table, ops, row) for row in row_batch]
-            ).reshape(-1, 1)
-            ##### test end
+            # # only for test: begin test
+            # # print(f"row_batch: {row_batch}")
+            # if self.args.model == "1-input":
+            #     ops = ["<="] * self.n_column
+            #     new_table = test_table
+            # elif self.args.model == "2-input":
+            #     ops = [">=", "<"] * self.n_column
+            #     rows, cols = test_table.shape
+            #     new_table = np.zeros((rows, 2 * cols))
+            #     for i in range(cols):
+            #         new_table[:, 2 * i] = test_table[:, i]
+            #         new_table[:, 2 * i + 1] = test_table[:, i]
+            # pred_batch = np.array(
+            #     [calculate_query_cardinality(new_table, ops, row) for row in row_batch]
+            # ).reshape(-1, 1)
+            # ##### test end
 
             Table_Generated = self._generate_subtable_by_row_batch(
                 row_batch, pred_batch, Table_Generated
@@ -447,6 +449,50 @@ class PWLLattice:
             Table_Generated = np.concatenate((Table_Generated, subtable), axis=0)
         return Table_Generated
 
+    def Test_generate_table_by_row(self, values, batch_size=10000, test_table=None):
+        total_combinations = np.prod([len(v) for v in values])
+        batch_number = (total_combinations // batch_size) + 1
+        print(f"\nBegin Generating Table by Row Batches ({batch_number=}, {batch_size=}) ...")
+
+        Table_Generated = np.empty((0, self.n_column), dtype=np.float32)
+        for row_batch in tqdm(self._yield_row_batch(values, batch_size), total=batch_number):
+            # pred_batch = self.model.predict(row_batch, verbose=0)
+            # # Case 1: change 0.8 to 0, 1.8 to 1
+            # pred_batch = (pred_batch * self.n_row).astype(int)
+
+            # only for test: begin test
+            # print(f"row_batch: {row_batch}")
+            if self.args.model == "1-input":
+                ops = ["<="] * self.n_column
+                new_table = test_table
+            elif self.args.model == "2-input":
+                ops = [">=", "<"] * self.n_column
+                rows, cols = test_table.shape
+                new_table = np.zeros((rows, 2 * cols))
+                for i in range(cols):
+                    new_table[:, 2 * i] = test_table[:, i]
+                    new_table[:, 2 * i + 1] = test_table[:, i]
+            pred_batch = np.array(
+                [calculate_query_cardinality(new_table, ops, row) for row in row_batch]
+            ).reshape(-1, 1)
+            ##### test end
+
+            Table_Generated = self._generate_subtable_by_row_batch(
+                row_batch, pred_batch, Table_Generated
+            )
+            if Table_Generated.shape[0] > self.n_row:
+                print(f"Reached table max row length({self.n_row}), stop generation.")
+                break
+        else:
+            if Table_Generated.shape[0] < self.n_row:
+                print(
+                    f"Generated table row length({Table_Generated.shape[0]}) is less than the original table row length({self.n_row})."
+                )
+            else:
+                print("Done.\n")
+            return Table_Generated
+        return Table_Generated[: self.n_row, :]
+
     def generate_table_by_col():
         pass
 
@@ -460,9 +506,6 @@ class PWLLatticeCopula(PWLLattice):
         table_size,
         unique_intervals,
         pwl_keypoints=None,
-        pwl_n=3,
-        lattice_size=2,
-        pwl_tanh=False,
     ):
         super().__init__(
             args,
@@ -470,50 +513,10 @@ class PWLLatticeCopula(PWLLattice):
             table_size,
             unique_intervals,
             pwl_keypoints,
-            pwl_n,
-            lattice_size,
-            pwl_tanh,
         )
 
         self.name = "PWLLatticeCopula"
         self.dim = self.n_column * 2
-        self.col_lattice_size = 2 if lattice_size == 0 else lattice_size
-
-    def build_model(self):
-        self.model_inputs = tf.keras.layers.Input(shape=[self.dim], name="input_layer")
-
-        self.column_PWL = [
-            column_PWL_layer(
-                self.model_inputs, self.pwl_keypoints, i, self.pwl_n, "2-input", self.pwl_tanh
-            )
-            for i in range(self.dim)
-        ]
-
-        # 2-input lattice layers for each column
-        self.col_lattice_layers = [
-            Lattice(
-                lattice_size=[self.col_lattice_size] * 2,
-                monotonicities=["increasing"] * 2,
-                col_idx=i // 2,
-            )([self.column_PWL[i], self.column_PWL[i + 1]])
-            for i in range(0, self.dim, 2)
-        ]
-
-        # here use lattice layer as the last layer to learn the joint CDF
-        # can be replaced by other layers, e.g., AutoRegressive Model
-        self.JointCDFModel = Lattice(
-            self.last_lattice_size,
-            monotonicities=["increasing"] * self.n_column,
-            col_idx="Joint-CDF",
-        )
-
-        self.model_output = self.JointCDFModel(self.col_lattice_layers)
-
-        self.model = tf.keras.models.Model(
-            inputs=self.model_inputs,
-            outputs=self.model_output,
-        )
-        self.model.summary()
 
     def _generate_subtable_by_row_batch(self, row_batch, pred_batch, Table_Generated=None):
         """
@@ -527,20 +530,6 @@ class PWLLatticeCopula(PWLLattice):
             # [::2] use the left interval of each column pair
             subtable = np.tile(vals[::2], (card, 1))
             Table_Generated = np.concatenate((Table_Generated, subtable), axis=0)
-            # if Table_Generated is None:
-            #     Table_Generated = subtable
-            # else:
-            #     Table_Generated = np.concatenate((Table_Generated, subtable), axis=0)
-
-        #     count += card
-        #     if count > self.n_row:
-        #         print(
-        #             f"Reached table max row length({self.n_row}) in {i}-th row of grid with grid value of {vals}, stop generation."
-        #         )
-        #         break
-        # else:
-        #     return Table_Generated
-        # return Table_Generated[: self.n_row, :]
         return Table_Generated
 
     def generate_table_by_col(self, unique_intervals, values, column_one_point, batch_size=10000):

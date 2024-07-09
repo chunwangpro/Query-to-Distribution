@@ -65,9 +65,19 @@ def calculate_query_cardinality(data, ops, vals):
     Returns:
     int: The cardinality (number of rows) that satisfy the query.
 
+    Example:
+    table = np.array([[1, 2, 3, 4, 5],
+                      [10, 20, 30, 40, 50],
+                      [10, 20, 30, 40, 50]]).T
+    data = table[:, [1, 2]]
+    ops = [">=", ">="]
+    vals = [20, 20]
+    result = calculate_query_cardinality(data, ops, vals)
+    print(result)
     """
-    if data is None:
-        return 0
+
+    # if data is None:
+    #     return 0
     # assert data.shape[1] == len(ops) == len(vals)
     bools = np.ones(data.shape[0], dtype=bool)
     for i, (o, v) in enumerate(zip(ops, vals)):
@@ -75,21 +85,15 @@ def calculate_query_cardinality(data, ops, vals):
     return bools.sum()
 
 
-# table = np.array([[1, 2, 3, 4, 5], [10, 20, 30, 40, 50], [10, 20, 30, 40, 50]]).T
-# data = table[:, [1, 2]]
-# ops = [">=", ">="]
-# vals = [20, 20]
-# print(calculate_query_cardinality(data, ops, vals))
-
-
-def calculate_Q_error(dataNew, query_set, table_size):
+def calculate_Q_error(dataNew, query_set, table_size=None):
     print("Begin Calculating Q-error ...")
     Q_error = []
     for query in tqdm(query_set):
         idxs, ops, vals, card_true = query
         card_pred = calculate_query_cardinality(dataNew[:, idxs], ops, vals)
-        # test
-        print(f"True: {card_true}, Pred: {card_pred}")
+
+        # # test: use selectivity, instead of cardinality, to calculate Q-error
+        # print(f"True: {card_true}, Pred: {card_pred}")
         # card_true /= table_size[0]
         # card_pred /= dataNew.shape[0]
 
