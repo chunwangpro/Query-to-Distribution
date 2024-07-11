@@ -297,7 +297,19 @@ X, y, m, values = setup_train_set_and_model(
     args, query_set, unique_intervals, modelPath, table_size
 )
 # m.show_all_attributes()
-m.build_model()
+
+
+# here use lattice layer as the last layer to learn the joint CDF
+# can be replaced by other layers, e.g., AutoRegressive Model
+last_lattice_size = args.lattice_size if args.last_lattice_size == 0 else args.last_lattice_size
+
+JointCDFodel = Lattice(
+    lattice_size=[last_lattice_size] * table_size[1],
+    monotonicities=["increasing"] * table_size[1],
+    col_idx="Joint-CDF",
+)
+
+m.build_model(JointCDFodel)
 print("Done.\n")
 
 

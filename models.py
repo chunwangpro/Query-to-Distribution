@@ -156,7 +156,7 @@ def setup_train_set_and_model(args, query_set, unique_intervals, modelPath, tabl
     """
     if args.model == "1-input":
         X, y = build_train_set_1_input(query_set, unique_intervals, args, table_size)
-        m = PWLLattice(
+        m = Generator_1_input(
             args,
             modelPath,
             table_size,
@@ -169,7 +169,7 @@ def setup_train_set_and_model(args, query_set, unique_intervals, modelPath, tabl
         X, y = build_train_set_2_input(query_set, unique_intervals, args, table_size)
         # model = LatticeCDF(unique_intervals, pwl_keypoints=None)
         # m = Trainer_Lattice(modelPath, table_size, pwl_keypoints=None)
-        m = PWLLatticeCopula(
+        m = Generator_2_input(
             args,
             modelPath,
             table_size,
@@ -251,7 +251,7 @@ def Lattice(lattice_size, monotonicities, col_idx, interpolation="simplex"):
     )
 
 
-class PWLLattice:
+class Generator_1_input:
     # PWL + Lattice: 1-input Model
     def __init__(
         self,
@@ -261,7 +261,7 @@ class PWLLattice:
         unique_intervals,
         pwl_keypoints=None,
     ):
-        self.name = "PWLLattice"
+        self.name = "Generator_1_input"
         self.args = args
         self.path = path
 
@@ -303,8 +303,13 @@ class PWLLattice:
         else:
             raise ModelTypeError()
 
-        self.Joint_CDF = input_model
-        self.model_output = self.Joint_CDF(self.column_cdf)
+        self.Joint_CDF = input_model(self.column_cdf)
+
+        input_keypoints = np.linspace(0, 1, num=1000)
+        self.model_output = PWL(input_keypoints, "last", "last", "increasing")(self.Joint_CDF)
+
+        # self.Joint_CDF = input_model
+        # self.model_output = self.Joint_CDF(self.column_cdf)
 
         self.model = tf.keras.models.Model(
             inputs=self.model_inputs,
@@ -380,37 +385,19 @@ class PWLLattice:
         if summary:
             print(self.model.summary())
 
-    def generate_table_by_row(self, values, batch_size=10000, test_table=None):
+    def generate_table_by_row(self, values, batch_size=10000):
         total_combinations = np.prod([len(v) for v in values])
         batch_number = (total_combinations // batch_size) + 1
         print(f"\nBegin Generating Table by Row Batches ({batch_number=}, {batch_size=}) ...")
-
         Table_Generated = np.empty((0, self.n_column), dtype=np.float32)
         for row_batch in tqdm(self._yield_row_batch(values, batch_size), total=batch_number):
             pred_batch = self.model.predict(row_batch, verbose=0)
             # Case 1: change 0.8 to 0, 1.8 to 1
             pred_batch = (pred_batch * self.n_row).astype(int)
-
-            # # only for test: begin test
-            # # print(f"row_batch: {row_batch}")
-            # if self.args.model == "1-input":
-            #     ops = ["<="] * self.n_column
-            #     new_table = test_table
-            # elif self.args.model == "2-input":
-            #     ops = [">=", "<"] * self.n_column
-            #     rows, cols = test_table.shape
-            #     new_table = np.zeros((rows, 2 * cols))
-            #     for i in range(cols):
-            #         new_table[:, 2 * i] = test_table[:, i]
-            #         new_table[:, 2 * i + 1] = test_table[:, i]
-            # pred_batch = np.array(
-            #     [calculate_query_cardinality(new_table, ops, row) for row in row_batch]
-            # ).reshape(-1, 1)
-            # ##### test end
-
             Table_Generated = self._generate_subtable_by_row_batch(
                 row_batch, pred_batch, Table_Generated
             )
+
             if Table_Generated.shape[0] > self.n_row:
                 print(f"Reached table max row length({self.n_row}), stop generation.")
                 break
@@ -497,7 +484,7 @@ class PWLLattice:
         pass
 
 
-class PWLLatticeCopula(PWLLattice):
+class Generator_2_input(Generator_1_input):
     # PWL + Lattice + Copula: 2-input Model
     def __init__(
         self,
@@ -515,7 +502,7 @@ class PWLLatticeCopula(PWLLattice):
             pwl_keypoints,
         )
 
-        self.name = "PWLLatticeCopula"
+        self.name = "Generator_2_input"
         self.dim = self.n_column * 2
 
     def _generate_subtable_by_row_batch(self, row_batch, pred_batch, Table_Generated=None):
@@ -529,6 +516,7 @@ class PWLLatticeCopula(PWLLattice):
 
             # [::2] use the left interval of each column pair
             subtable = np.tile(vals[::2], (card, 1))
+
             Table_Generated = np.concatenate((Table_Generated, subtable), axis=0)
         return Table_Generated
 
