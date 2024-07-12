@@ -86,7 +86,7 @@ def calculate_query_cardinality(data, ops, vals):
 
 
 def calculate_Q_error(dataNew, query_set, table_size=None):
-    print("Begin Calculating Q-error ...")
+    print("\nBegin Calculating Q-error ...")
     Q_error = []
     for query in tqdm(query_set):
         idxs, ops, vals, card_true = query
