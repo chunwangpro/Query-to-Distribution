@@ -16,7 +16,10 @@ python SingleTable.py --model 1-input --dataset wine3 --query-size 100000 --min-
 python SingleTable.py --model 2-input --dataset wine2 --query-size 1000 --min-conditions 1 --max-conditions 2 --lattice-size 2
 ```
 
-### LPALG (PGM)
+### Baseline
+
+- LPALG (PGM)
+
 ```bash
 python LPALG.py --dataset wine --query-size 5 --num-conditions 2
 ```
