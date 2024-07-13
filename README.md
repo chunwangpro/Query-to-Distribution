@@ -21,9 +21,10 @@ python SingleTable.py --model 2-input --dataset wine2 --query-size 1000 --min-co
 python LPALG.py --dataset wine --query-size 5 --num-conditions 2
 ```
 
-## 代码说明
+## Code Description
 
-- LPALG.py          ----- Baseline of LPALG (PGM)
-- PWLLattice.py     ----- PWL-Lattice 网络
-- query_func.py     ----- query related functions (rewrite by numpy)
-- models.py         ----- models
+- LPALG.py           ----- Baseline of LPALG (PGM)
+- SingleTable.py     ----- Single table generator
+- query_func.py      ----- query related functions (rewrite by numpy version)
+- process_dataset.py ----- load and sort dataframe columns by unique number
+- models.py          ----- models
