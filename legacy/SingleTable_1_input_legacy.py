@@ -712,7 +712,7 @@ if __name__ == "__main__":
         f"{args.dataset}_{args.query_size}_{args.min_conditions}_{args.max_conditions}_{args.loss}"
     )
     resultsPath = f"results/{FilePath}"
-    modelPath = f"saved_models/{FilePath}"
+    modelPath = f"models/{FilePath}"
     make_directory(resultsPath)
     make_directory(modelPath)
 
