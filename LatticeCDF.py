@@ -259,10 +259,6 @@ class LatticeCDF:
     def load(self, name):
         self.model.load_weights("%s.hdf5" % self.name)
 
-    def generate(self, grid, table_size):
-
-        return df
-
     def sample(self, unique_vals, n):
         assert self.dim == len(unique_vals)
 
