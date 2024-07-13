@@ -6,29 +6,29 @@
 ## calculate_query_cardinality: numpy version
 
 # Generation Phase:
-## generate_by_row / generate_row_batch_table / np.concatenate
+## generate_by_row / generate_by_col
 
 # no Plottings
 import argparse
 import os
-import warnings
 
 import numpy as np
 from tqdm import tqdm
 
 from models import *
+from process_dataset import *
 from query_func import *
 
 np.random.seed(42)
-warnings.filterwarnings("ignore")
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--model", type=str, default="2-input", help="model type")
-parser.add_argument("--dataset", type=str, default="wine3", help="Dataset.")
-parser.add_argument("--query-size", type=int, default=10000, help="query size")
+parser.add_argument("--model", type=str, default="1-input", help="model type")
+parser.add_argument("--dataset", type=str, default="wine2", help="Dataset.")
+parser.add_argument("--query-size", type=int, default=100, help="query size")
 parser.add_argument("--min-conditions", type=int, default=1, help="min num of query conditions")
-parser.add_argument("--max-conditions", type=int, default=3, help="max num of query conditions")
+parser.add_argument("--max-conditions", type=int, default=2, help="max num of query conditions")
+
 parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size for each column.")
 parser.add_argument(
     "--last-lattice-size", type=int, default=2, help="Lattice size for Joint CDF model."
@@ -66,7 +66,7 @@ def make_directory(directory):
 
 
 FilePath = (
-    f"{args.dataset}_{args.query_size}_{args.min_conditions}_{args.max_conditions}_{args.loss}"
+    f"{args.dataset}_{args.query_size}_{args.min_conditions}_{args.max_conditions}_{args.model}"
 )
 resultsPath = f"results/{FilePath}"
 modelPath = f"models/{FilePath}"
@@ -84,10 +84,10 @@ OPS = {
 
 
 print("\nBegin Loading Data ...")
-table = np.loadtxt(f"datasets/{args.dataset}.csv", delimiter=",")
-table = table.reshape(len(table), -1)
-table_size = table.shape[0], table.shape[1]
-np.savetxt(f"{resultsPath}/original_table.csv", table, delimiter=",")
+table, original_table_columns, sorted_table_columns, max_decimal_places = load_and_process_dataset(
+    args.dataset, resultsPath
+)
+table_size = table.shape
 print(f"{args.dataset}.csv,    shape: {table_size}")
 print("Done.\n")
 
@@ -131,10 +131,12 @@ m.load()
 
 
 Table_Generated = m.generate_table_by_row(values, batch_size=10000)
-np.savetxt(f"{resultsPath}/generated_table.csv", Table_Generated, delimiter=",")
-
-
 Q_error = calculate_Q_error(Table_Generated, query_set)
 print_Q_error(Q_error, args, resultsPath)
 print(f"\n Original table shape : {table_size}")
 print(f"Generated table shape : {Table_Generated.shape}")
+
+recovered_Table_Generated = recover_table_as_original(
+    Table_Generated, original_table_columns, sorted_table_columns, max_decimal_places
+)
+recovered_Table_Generated.to_csv(f"{resultsPath}/generated_table.csv", index=False, header=False)
