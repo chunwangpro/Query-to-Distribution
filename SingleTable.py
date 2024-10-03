@@ -15,8 +15,8 @@ import os
 import numpy as np
 from tqdm import tqdm
 
+from dataset import *
 from models import *
-from process_dataset import *
 from utils import *
 
 np.random.seed(42)

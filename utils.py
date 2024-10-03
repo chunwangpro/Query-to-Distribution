@@ -14,11 +14,11 @@ OPS = {
 def generate_random_query(table, args, rng):
     """Generate a random query."""
     conditions = rng.randint(args.min_conditions, args.max_conditions + 1)
-    if args.model == "2-input":
-        # ops = rng.choice(["<", "<=", ">", ">=", "="], replace=True, size=conditions)
-        ops = rng.choice(["="], replace=True, size=conditions)
-    elif args.model == "1-input":
+    if args.model == "1-input":
         ops = rng.choice(["<="], replace=True, size=conditions)
+    elif args.model == "2-input":
+        ops = rng.choice(["<", "<=", ">", ">=", "="], replace=True, size=conditions)
+        # ops = rng.choice(["="], replace=True, size=conditions)
     idxs = rng.choice(table.shape[1], replace=False, size=conditions)
     idxs = np.sort(idxs)
     cols = table[:, idxs]
@@ -28,7 +28,6 @@ def generate_random_query(table, args, rng):
 
 
 def column_intervalization(query_set, table_size):
-    # apply the query intervalization for each column
     column_interval = {i: set() for i in range(table_size[1])}
     for query in query_set:
         idxs, _, vals, _ = query
@@ -66,6 +65,9 @@ def calculate_query_cardinality(data, ops, vals):
     int: The cardinality (number of rows) that satisfy the query.
 
     Example:
+    for empty table, use np.empty((n_row, n_col), dtype=np.float32), return 0.
+
+    for non-empty table:
     table = np.array([[1, 2, 3, 4, 5],
                       [10, 20, 30, 40, 50],
                       [10, 20, 30, 40, 50]]).T
@@ -76,8 +78,6 @@ def calculate_query_cardinality(data, ops, vals):
     print(result)
     """
 
-    # if data is None:
-    #     return 0
     # assert data.shape[1] == len(ops) == len(vals)
     bools = np.ones(data.shape[0], dtype=bool)
     for i, (o, v) in enumerate(zip(ops, vals)):
