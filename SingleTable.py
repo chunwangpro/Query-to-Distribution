@@ -60,14 +60,16 @@ except:
     args, unknown = parser.parse_known_args()
 
 
+FilePath = (
+    f"{args.dataset}_{args.query_size}_{args.min_conditions}_{args.max_conditions}_{args.model}"
+)
+
+
 def make_directory(directory):
     if not os.path.exists(directory):
         os.makedirs(directory)
 
 
-FilePath = (
-    f"{args.dataset}_{args.query_size}_{args.min_conditions}_{args.max_conditions}_{args.model}"
-)
 resultsPath = f"results/{FilePath}"
 modelPath = f"models/{FilePath}"
 make_directory(resultsPath)
