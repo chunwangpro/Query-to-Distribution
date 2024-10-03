@@ -34,7 +34,7 @@ def column_intervalization(query_set, table_size):
         idxs, _, vals, _ = query
         for i in range(len(idxs)):
             column_interval[idxs[i]].add(vals[i])
-    # modify the column_interval to apply to <, <=, >, >=, =
+    # Apply the column_interval to <, <=, >, >=, =
     for k, v in column_interval.items():
         if not v:
             # use [0] for empty column interval

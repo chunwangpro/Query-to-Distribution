@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from models import *
 from process_dataset import *
-from query_func import *
+from utils import *
 
 np.random.seed(42)
 

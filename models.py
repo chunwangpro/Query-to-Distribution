@@ -6,7 +6,7 @@ import tensorflow as tf
 import tensorflow_lattice as tfl
 from tqdm import tqdm
 
-from query_func import *
+from utils import *
 
 np.random.seed(42)
 warnings.filterwarnings("ignore")

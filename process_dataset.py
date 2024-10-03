@@ -1,4 +1,5 @@
 # Description: This script loads a CSV file and processes it in the following way:
+
 ## Converts all floats to integers by multiplying them by 10^d, where d is the maximum number of decimal places in the dataset.
 ## Sorts the columns by the number of unique values in each column.
 
@@ -7,7 +8,7 @@
 import pandas as pd
 
 
-def convert_datatype_to_int(df):
+def _convert_datatype_to_int(df):
     def find_decimal_places(x):
         if isinstance(x, float):
             decimal_part = str(x).split(".")[1]
@@ -19,7 +20,7 @@ def convert_datatype_to_int(df):
     return df_int, max_decimal_places
 
 
-def sort_by_column_unique_number(df, ascending=False):
+def _sort_by_column_unique_number(df, ascending=False):
     original_table_columns = df.columns.tolist()
     sorted_table_columns = df.nunique().sort_values(ascending=ascending).index.tolist()
     modified_data = df[sorted_table_columns].copy().to_numpy().reshape(len(df), -1)
@@ -29,8 +30,8 @@ def sort_by_column_unique_number(df, ascending=False):
 def load_and_process_dataset(file_path, resultsPath):
     df = pd.read_csv(f"datasets/{file_path}.csv", header=None)
     df.to_csv(f"{resultsPath}/original_table.csv", index=False, header=False)
-    df_int, max_decimal_places = convert_datatype_to_int(df)
-    modified_data, original_table_columns, sorted_table_columns = sort_by_column_unique_number(
+    df_int, max_decimal_places = _convert_datatype_to_int(df)
+    modified_data, original_table_columns, sorted_table_columns = _sort_by_column_unique_number(
         df_int, ascending=False
     )
     return modified_data, original_table_columns, sorted_table_columns, max_decimal_places
