@@ -6,6 +6,7 @@ import tensorflow as tf
 import tensorflow_lattice as tfl
 from tqdm import tqdm
 
+from CDF_models import *
 from utils import *
 
 np.random.seed(42)
@@ -303,7 +304,15 @@ class BaseModel:
         else:
             raise ModelTypeError()
 
-        self.Joint_CDF = input_model(self.column_cdf)
+        # self.Joint_CDF = input_model(self.column_cdf)
+        # self.Joint_CDF = ResNetCDFLayer(self.column_cdf, self.n_column)
+        concatenated_output = tf.keras.layers.Concatenate(axis=-1, name="concat_cdf")(
+            self.column_cdf
+        )
+
+        self.Joint_CDF = ResNetCDFLayer(
+            input_layer=concatenated_output, num_residual_blocks=4, hidden_dim=64, output_dim=1
+        )
 
         if self.args.use_last_pwl:
             input_keypoints = np.linspace(0, 1, num=1000)
@@ -408,17 +417,12 @@ class Generator_1_input(BaseModel):
 
     def generate_table_by_row(self, values, batch_size=10000):
         batch_number = self._calculate_batch_number(values, batch_size)
-
         print(f"\nBegin Generating Table by Row Batches ({batch_number=}, {batch_size=}) ...")
-
         Table_Generated = np.empty((0, self.n_column), dtype=np.float32)
-
         for row_batch in tqdm(self._yield_row_batch(values, batch_size), total=batch_number):
-
             pred_batch = self.model.predict(row_batch, verbose=0)
             # Case 1: change 0.8 to 0, 1.8 to 1
             pred_batch = (pred_batch * self.n_row).astype(int)
-
             Table_Generated = self._generate_subtable_by_row_batch(
                 row_batch, pred_batch, Table_Generated
             )

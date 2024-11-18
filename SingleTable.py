@@ -15,8 +15,9 @@ import os
 import numpy as np
 from tqdm import tqdm
 
+from CDF_models import *
 from dataset import *
-from models import *
+from generators import *
 from utils import *
 
 np.random.seed(42)
@@ -24,10 +25,10 @@ np.random.seed(42)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model", type=str, default="1-input", help="model type")
-parser.add_argument("--dataset", type=str, default="wine2", help="Dataset.")
+parser.add_argument("--dataset", type=str, default="wine5", help="Dataset.")
 parser.add_argument("--query-size", type=int, default=100, help="query size")
 parser.add_argument("--min-conditions", type=int, default=1, help="min num of query conditions")
-parser.add_argument("--max-conditions", type=int, default=2, help="max num of query conditions")
+parser.add_argument("--max-conditions", type=int, default=5, help="max num of query conditions")
 
 parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size for each column.")
 parser.add_argument(
@@ -116,13 +117,16 @@ X, y, m, values = setup_train_set_and_model(
 
 # here use lattice layer as the last layer to learn the joint CDF
 # can be replaced by other layers, e.g., AutoRegressive Model
-last_lattice_size = args.lattice_size if args.last_lattice_size == 0 else args.last_lattice_size
+# last_lattice_size = args.lattice_size if args.last_lattice_size == 0 else args.last_lattice_size
 
-JointCDFodel = Lattice(
-    lattice_size=[last_lattice_size] * table_size[1],
-    monotonicities=["increasing"] * table_size[1],
-    col_idx="Joint-CDF",
-)
+# JointCDFodel = Lattice(
+#     lattice_size=[last_lattice_size] * table_size[1],
+#     monotonicities=["increasing"] * table_size[1],
+#     col_idx="Joint-CDF",
+# )
+
+JointCDFodel = ResNetCDFLayer
+
 
 m.build_model(JointCDFodel)
 print("Done.\n")
