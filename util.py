@@ -37,7 +37,7 @@ def column_intervalization(query_set, table_size):
     for k, v in column_interval.items():
         if not v:
             # use [0] for empty column interval
-            column_interval[k] = [0]
+            column_interval[k] = [0, 1]
         else:
             interval_list = sorted(list(v))
             add_small = 2 * interval_list[0] - interval_list[1]
@@ -91,20 +91,6 @@ def calculate_Q_error(dataNew, query_set, table_size=None):
     for query in tqdm(query_set):
         idxs, ops, vals, card_true = query
         card_pred = calculate_query_cardinality(dataNew[:, idxs], ops, vals)
-
-        # # test: use selectivity, instead of cardinality, to calculate Q-error
-        # print(f"True: {card_true}, Pred: {card_pred}")
-        # card_true /= table_size[0]
-        # card_pred /= dataNew.shape[0]
-
-        # if card_pred == 0:
-        #     card_pred = 1
-        # if card_true == 0:
-        #     card_true = 1
-
-        # Q_error.append(max(card_pred / card_true, card_true / card_pred))
-        # # end test
-
         if card_pred == 0 and card_true == 0:
             Q_error.append(1)
         elif card_pred == 0:
@@ -122,16 +108,9 @@ def print_Q_error(Q_error, args, resultsPath):
     print(args)
     statistics = {
         "min": np.min(Q_error),
-        "10": np.percentile(Q_error, 10),
-        "20": np.percentile(Q_error, 20),
-        "30": np.percentile(Q_error, 30),
-        "40": np.percentile(Q_error, 40),
-        "median": np.median(Q_error),
-        "60": np.percentile(Q_error, 60),
-        "70": np.percentile(Q_error, 70),
-        "80": np.percentile(Q_error, 80),
+        "50": np.median(Q_error),
+        "75": np.percentile(Q_error, 75),
         "90": np.percentile(Q_error, 90),
-        "95": np.percentile(Q_error, 95),
         "99": np.percentile(Q_error, 99),
         "max": np.max(Q_error),
         "mean": np.mean(Q_error),

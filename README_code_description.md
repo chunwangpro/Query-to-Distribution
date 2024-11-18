@@ -8,12 +8,13 @@
 
 
 ## query related functions
-- query_func.py              --- query related functions (rewrite by numpy)
+- util.py              --- query related functions (rewrite by numpy)
 - common.py / datasets.py / estimators.py  --- legacy vertion using CSVTable and Oracle
 
 
 ## models
-- models.py                  --- models(build train set, 1-input, 2-input)
+- preprocessing.py           --- build train set
+- model.py                   --- models
 - LatticeCDF.py              --- legacy version(...)
 
 

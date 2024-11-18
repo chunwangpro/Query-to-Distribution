@@ -27,8 +27,9 @@ python LPALG.py --dataset wine --query-size 5 --num-conditions 2
 ## Code Description
 
 - LPALG.py           ----- Baseline of LPALG (PGM)
-- SingleTable.py     ----- Single table generator
-- utils.py           ----- query related functions (rewrite by numpy version)
+- SingleTable.py     ----- Single table generation
+- util.py            ----- query related functions (rewrite by numpy version)
 - dataset.py         ----- load and sort dataframe columns by unique number
-- models.py          ----- models
-- generators.py      ----- generation methods
+- preprocessing.py   ----- build train set
+- model.py           ----- models
+- generator.py       ----- generation methods, by row, by col
