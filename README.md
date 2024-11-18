@@ -31,3 +31,4 @@ python LPALG.py --dataset wine --query-size 5 --num-conditions 2
 - utils.py           ----- query related functions (rewrite by numpy version)
 - dataset.py         ----- load and sort dataframe columns by unique number
 - models.py          ----- models
+- generators.py      ----- generation methods
