@@ -4,12 +4,11 @@
 
 ### Single Table
 
-
-
 ```bash
-python SingleTable.py --dataset wine3 --query-size 10000 --min-conditions 1 --max-conditions 3 --cdf res
+python SingleTable.py --dataset wine3 --query-size 10000 --min-conditions 1 --max-conditions 2
 ```
 
+Q-error: median 1.14, 90th 3.09, 99th 17.37, max 488.
 
 ### Baseline
 

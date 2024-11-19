@@ -29,8 +29,8 @@ parser.add_argument("--model", type=str, default="1-input", help="model type")
 parser.add_argument("--dataset", type=str, default="wine3", help="Dataset.")
 parser.add_argument("--query-size", type=int, default=10000, help="query size")
 parser.add_argument("--min-conditions", type=int, default=1, help="min num of query conditions")
-parser.add_argument("--max-conditions", type=int, default=3, help="max num of query conditions")
-parser.add_argument("--cdf", type=str, default="lattice", help="joint cdf model, lattice or res")
+parser.add_argument("--max-conditions", type=int, default=2, help="max num of query conditions")
+parser.add_argument("--cdf", type=str, default="res", help="joint cdf model, lattice or res")
 parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size for each column.")
 parser.add_argument(
     "--last-lattice-size", type=int, default=2, help="Lattice size for Joint CDF model."
