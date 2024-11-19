@@ -30,7 +30,7 @@ parser.add_argument("--dataset", type=str, default="wine3", help="Dataset.")
 parser.add_argument("--query-size", type=int, default=10000, help="query size")
 parser.add_argument("--min-conditions", type=int, default=1, help="min num of query conditions")
 parser.add_argument("--max-conditions", type=int, default=3, help="max num of query conditions")
-
+parser.add_argument("--cdf", type=str, default="lattice", help="joint cdf model, lattice or res")
 parser.add_argument("--lattice-size", type=int, default=2, help="Lattice size for each column.")
 parser.add_argument(
     "--last-lattice-size", type=int, default=2, help="Lattice size for Joint CDF model."
@@ -116,7 +116,7 @@ X, y, m, values = setup_train_set_and_model(
 # m.show_all_attributes()
 
 
-m.build_model("Res")
+m.build_model(args.cdf)
 print("Done.\n")
 
 

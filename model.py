@@ -144,7 +144,7 @@ class BaseModel:
                 monotonicities=["increasing"] * self.n_column,
                 col_idx="Joint-CDF",
             )(self.column_cdf)
-        elif use_CDF == "Res":
+        elif use_CDF == "res":
             concatenated_output = tf.keras.layers.Concatenate(axis=-1, name="concat_cdf")(
                 self.column_cdf
             )

@@ -17,7 +17,8 @@ def generate_random_query(table, args, rng):
     if args.model == "1-input":
         ops = rng.choice(["<="], replace=True, size=conditions)
     elif args.model == "2-input":
-        ops = rng.choice(["<", "<=", ">", ">=", "="], replace=True, size=conditions)
+        # ops = rng.choice(["<", "<=", ">", ">=", "="], replace=True, size=conditions)
+        ops = rng.choice(["<="], replace=True, size=conditions)
         # ops = rng.choice(["="], replace=True, size=conditions)
     idxs = rng.choice(table.shape[1], replace=False, size=conditions)
     idxs = np.sort(idxs)

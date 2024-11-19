@@ -4,17 +4,12 @@
 
 ### Single Table
 
-- 1-input model for "<="
+
 
 ```bash
-python SingleTable.py --model 1-input --dataset wine3 --query-size 100000 --min-conditions 1 --max-conditions 3 --lattice-size 2
+python SingleTable.py --dataset wine3 --query-size 10000 --min-conditions 1 --max-conditions 3 --cdf res
 ```
 
-- 2-input model for "<, <=, >, >=, ="
-
-```bash
-python SingleTable.py --model 2-input --dataset wine2 --query-size 1000 --min-conditions 1 --max-conditions 2 --lattice-size 2
-```
 
 ### Baseline
 
